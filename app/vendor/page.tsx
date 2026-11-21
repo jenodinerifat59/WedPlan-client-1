@@ -2,8 +2,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getAuthToken } from "@/lib/get-token";
 import { api } from "@/lib/api";
+
 import {
   BriefcaseBusiness,
   CalendarCheck,
@@ -13,6 +15,7 @@ import {
   ArrowUpRight,
   Crown,
   Sparkles,
+  Plus,
 } from "lucide-react";
 
 interface Overview {
@@ -23,7 +26,23 @@ interface Overview {
   plan: string;
 }
 
+interface Booking {
+  _id: string;
+  eventDate: string;
+  eventLocation: string;
+  status: string;
+  customer?: {
+    name?: string;
+    email?: string;
+  };
+  service?: {
+    serviceName?: string;
+  };
+}
+
 export default function VendorDashboard() {
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+
   const [overview, setOverview] = useState<Overview>({
     totalServices: 0,
     activeServices: 0,
@@ -34,7 +53,9 @@ export default function VendorDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
 
+  // Fetch Dashboard Overview
   const fetchOverview = async () => {
     try {
       setLoading(true);
@@ -51,17 +72,64 @@ export default function VendorDashboard() {
       setOverview(result);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to load dashboard"
+        err instanceof Error ? err.message : "Failed to load dashboard"
       );
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch Recent Bookings
+  const fetchRecentBookings = async () => {
+    try {
+      const token = await getAuthToken();
+
+      const result = await api(
+        "/api/vendor/recent-bookings",
+        { method: "GET" },
+        token
+      );
+
+      setRecentBookings(Array.isArray(result) ? result : []);
+    } catch (err) {
+      console.error("Recent bookings error:", err);
+    }
+  };
+
+  // Accept / Reject Booking
+  const handleBookingAction = async (
+    id: string,
+    status: "accepted" | "rejected"
+  ) => {
+    try {
+      setActionLoading(id);
+
+      const token = await getAuthToken();
+
+      await api(
+        `/api/vendor/bookings/${id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        },
+        token
+      );
+
+      await Promise.all([
+        fetchRecentBookings(),
+        fetchOverview(),
+      ]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  // Initial Load
   useEffect(() => {
     fetchOverview();
+    fetchRecentBookings();
   }, []);
 
   const stats = [
@@ -122,17 +190,30 @@ export default function VendorDashboard() {
           </p>
         </div>
 
-        <button
-          onClick={fetchOverview}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 bg-[#18382D] text-white px-5 py-3 rounded-xl hover:bg-[#244A3B] transition shadow-sm disabled:opacity-50"
-        >
-          <RefreshCw
-            size={17}
-            className={loading ? "animate-spin" : ""}
-          />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/vendor/services/add"
+            className="flex items-center gap-2 bg-[#B68B62] text-white px-5 py-3 rounded-xl hover:bg-[#9F7652] transition"
+          >
+            <Plus size={18} />
+            Add New Service
+          </Link>
+
+          <button
+            onClick={() => {
+              fetchOverview();
+              fetchRecentBookings();
+            }}
+            disabled={loading}
+            className="flex items-center gap-2 bg-[#18382D] text-white px-5 py-3 rounded-xl hover:bg-[#244A3B] transition disabled:opacity-50"
+          >
+            <RefreshCw
+              size={17}
+              className={loading ? "animate-spin" : ""}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Error */}
@@ -154,9 +235,9 @@ export default function VendorDashboard() {
         </div>
       )}
 
-      {/* Statistics Cards */}
       {!loading && !error && (
         <>
+          {/* Statistics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
             {stats.map((item) => {
               const Icon = item.icon;
@@ -166,9 +247,7 @@ export default function VendorDashboard() {
                   key={item.title}
                   className="group relative overflow-hidden bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
                 >
-                  <div
-                    className={`absolute top-0 left-0 w-full h-1 ${item.accent}`}
-                  />
+                  <div className={`absolute top-0 left-0 w-full h-1 ${item.accent}`} />
 
                   <div className="flex items-center justify-between">
                     <div>
@@ -181,13 +260,8 @@ export default function VendorDashboard() {
                       </h2>
                     </div>
 
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center ${item.iconBg} group-hover:scale-110 transition-transform duration-300`}
-                    >
-                      <Icon
-                        size={26}
-                        className={item.iconColor}
-                      />
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${item.iconBg}`}>
+                      <Icon size={26} className={item.iconColor} />
                     </div>
                   </div>
 
@@ -232,9 +306,7 @@ export default function VendorDashboard() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-white/60">
-                    Current Plan
-                  </p>
+                  <p className="text-xs text-white/60">Current Plan</p>
                   <p className="font-bold capitalize text-lg">
                     {overview.plan}
                   </p>
@@ -249,14 +321,9 @@ export default function VendorDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="bg-white border border-gray-100 rounded-2xl p-6">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-[#E8EFE9] flex items-center justify-center">
-                  <BriefcaseBusiness className="text-[#244A3B]" />
-                </div>
-
+                <BriefcaseBusiness className="text-[#244A3B]" />
                 <div>
-                  <h3 className="font-semibold text-[#18382D]">
-                    Your Services
-                  </h3>
+                  <h3 className="font-semibold text-[#18382D]">Your Services</h3>
                   <p className="text-sm text-gray-500">
                     {overview.totalServices} services created
                   </p>
@@ -266,20 +333,116 @@ export default function VendorDashboard() {
 
             <div className="bg-white border border-gray-100 rounded-2xl p-6">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-[#FBF0E3] flex items-center justify-center">
-                  <CalendarCheck className="text-[#B68B62]" />
-                </div>
-
+                <CalendarCheck className="text-[#B68B62]" />
                 <div>
-                  <h3 className="font-semibold text-[#18382D]">
-                    Booking Activity
-                  </h3>
+                  <h3 className="font-semibold text-[#18382D]">Booking Activity</h3>
                   <p className="text-sm text-gray-500">
                     {overview.pendingBookings + overview.acceptedBookings} active booking requests
                   </p>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Recent Booking Requests */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-[#18382D]">
+                  Recent Booking Requests
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Your latest customer booking requests
+                </p>
+              </div>
+
+              <Link
+                href="/vendor/bookings"
+                className="text-sm font-semibold text-[#B68B62] hover:text-[#18382D]"
+              >
+                View All →
+              </Link>
+            </div>
+
+            {recentBookings.length === 0 ? (
+              <div className="text-center py-10 bg-[#FAF9F6] rounded-xl">
+                <CalendarCheck size={35} className="mx-auto text-gray-400 mb-3" />
+                <p className="font-semibold text-[#18382D]">
+                  No Booking Requests Yet
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  New customer requests will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentBookings.map((booking) => (
+                  <div
+                    key={booking._id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-gray-100 hover:bg-[#FAF9F6] transition"
+                  >
+                    <div>
+                      <h3 className="font-semibold text-[#18382D]">
+                        {booking.service?.serviceName || "Wedding Service"}
+                      </h3>
+
+                      <p className="text-sm text-gray-500 mt-1">
+                        {booking.customer?.name || "Customer"}
+                        {booking.customer?.email
+                          ? ` • ${booking.customer.email}`
+                          : ""}
+                      </p>
+
+                      <p className="text-xs text-gray-400 mt-2">
+                        {booking.eventDate
+                          ? new Date(booking.eventDate).toLocaleDateString()
+                          : "Date not specified"}
+                        {" • "}
+                        {booking.eventLocation || "Location not specified"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`px-3 py-2 rounded-full text-xs font-semibold capitalize ${
+                          booking.status === "accepted"
+                            ? "bg-green-100 text-green-700"
+                            : booking.status === "rejected"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {booking.status}
+                      </span>
+
+                      {booking.status === "pending" && (
+                        <>
+                          <button
+                            disabled={actionLoading === booking._id}
+                            onClick={() =>
+                              handleBookingAction(booking._id, "accepted")
+                            }
+                            className="px-3 py-2 bg-green-600 text-white rounded-lg text-xs disabled:opacity-50"
+                          >
+                            {actionLoading === booking._id ? "..." : "Accept"}
+                          </button>
+
+                          <button
+                            disabled={actionLoading === booking._id}
+                            onClick={() =>
+                              handleBookingAction(booking._id, "rejected")
+                            }
+                            className="px-3 py-2 bg-red-600 text-white rounded-lg text-xs disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}

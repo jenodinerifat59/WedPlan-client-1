@@ -3,6 +3,16 @@
 
 import { useEffect, useState } from "react";
 import { getAuthToken } from "@/lib/get-token";
+import {
+  CalendarDays,
+  MapPin,
+  Mail,
+  UserRound,
+  CheckCircle2,
+  XCircle,
+  MessageSquare,
+  RefreshCw,
+} from "lucide-react";
 
 interface Booking {
   _id: string;
@@ -28,7 +38,13 @@ export default function VendorBookings() {
 
   const fetchBookings = async () => {
     try {
+      setError("");
+
       const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("Please login first.");
+      }
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/vendor/bookings`,
@@ -46,7 +62,8 @@ export default function VendorBookings() {
         throw new Error(data.message || "Failed to load bookings");
       }
 
-      setBookings(data.bookings || []);
+      // Backend returns a direct array
+      setBookings(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong"
@@ -72,7 +89,7 @@ export default function VendorBookings() {
       const token = await getAuthToken();
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/bookings/${bookingId}/status`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/vendor/bookings/${bookingId}`,
         {
           method: "PATCH",
           headers: {
@@ -102,97 +119,245 @@ export default function VendorBookings() {
   };
 
   if (loading) {
-    return <p className="p-8">Loading bookings...</p>;
+    return (
+      <div className="flex justify-center py-20">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#244A3B]/20 border-t-[#244A3B]" />
+      </div>
+    );
   }
 
   return (
-    <main className="mx-auto max-w-6xl p-8">
-      <h1 className="mb-6 text-3xl font-bold text-[#244A3B]">
-        Vendor Bookings
-      </h1>
+    <div className="mx-auto max-w-6xl">
 
+      {/* Messages */}
       {error && (
-        <p className="mb-4 rounded-lg bg-red-50 p-3 text-red-600">
+        <div className="mb-5 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
           {error}
-        </p>
+        </div>
       )}
 
       {success && (
-        <p className="mb-4 rounded-lg bg-green-50 p-3 text-green-700">
+        <div className="mb-5 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-700">
           {success}
-        </p>
+        </div>
       )}
 
+      {/* Booking Summary */}
+      <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Total Requests</p>
+          <h2 className="mt-2 text-3xl font-bold text-[#18382D]">
+            {bookings.length}
+          </h2>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Pending Requests</p>
+          <h2 className="mt-2 text-3xl font-bold text-amber-600">
+            {bookings.filter((b) => b.status === "pending").length}
+          </h2>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Accepted Bookings</p>
+          <h2 className="mt-2 text-3xl font-bold text-green-700">
+            {bookings.filter((b) => b.status === "accepted").length}
+          </h2>
+        </div>
+
+      </div>
+
+      {/* Section Heading */}
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-[#18382D]">
+            Customer Requests
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Review and manage your booking requests.
+          </p>
+        </div>
+
+        <button
+          onClick={fetchBookings}
+          className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-[#244A3B] transition hover:bg-gray-50"
+        >
+          <RefreshCw size={15} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Empty State */}
       {bookings.length === 0 ? (
-        <p>No booking requests yet.</p>
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
+          <CalendarDays className="mx-auto h-12 w-12 text-gray-300" />
+
+          <h3 className="mt-4 text-lg font-semibold text-[#18382D]">
+            No Booking Requests Yet
+          </h3>
+
+          <p className="mt-2 text-sm text-gray-500">
+            Customer booking requests will appear here.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-4">
+
+        /* Booking Cards */
+        <div className="grid gap-5 lg:grid-cols-2">
           {bookings.map((booking) => (
             <div
               key={booking._id}
-              className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+              className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
             >
-              <h2 className="text-lg font-semibold text-[#244A3B]">
-                {booking.service?.serviceName || "Service"}
-              </h2>
+              <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-5">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-[#B68B62]">
+                    Booking Request
+                  </p>
 
-              <div className="mt-3 space-y-2 text-sm text-gray-600">
-                <p>
-                  Customer: {booking.customer?.name || "Unknown"}
-                </p>
+                  <h3 className="mt-2 text-lg font-bold text-[#18382D]">
+                    {booking.service?.serviceName || "Service"}
+                  </h3>
+                </div>
 
-                <p>
-                  Email: {booking.customer?.email || "N/A"}
-                </p>
-
-                <p>
-                  Event Date:{" "}
-                  {new Date(booking.eventDate).toLocaleDateString()}
-                </p>
-
-                <p>Location: {booking.eventLocation}</p>
-
-                {booking.message && (
-                  <p>Message: {booking.message}</p>
-                )}
-
-                <p>
-                  Status:{" "}
-                  <span className="font-semibold capitalize">
-                    {booking.status}
-                  </span>
-                </p>
+                <span
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
+                    booking.status === "accepted"
+                      ? "bg-green-50 text-green-700"
+                      : booking.status === "rejected"
+                      ? "bg-red-50 text-red-600"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {booking.status}
+                </span>
               </div>
 
-              {booking.status === "pending" && (
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    onClick={() =>
-                      updateStatus(booking._id, "accepted")
-                    }
-                    disabled={updatingId === booking._id}
-                    className="rounded-full bg-[#244A3B] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#18382D] disabled:opacity-50"
-                  >
-                    {updatingId === booking._id
-                      ? "Updating..."
-                      : "Accept"}
-                  </button>
+              <div className="space-y-4 p-5">
 
-                  <button
-                    onClick={() =>
-                      updateStatus(booking._id, "rejected")
-                    }
-                    disabled={updatingId === booking._id}
-                    className="rounded-full bg-red-50 px-6 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-[#244A3B]/10 p-2.5 text-[#244A3B]">
+                    <UserRound size={19} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500">Customer</p>
+                    <p className="text-sm font-semibold text-[#18382D]">
+                      {booking.customer?.name || "Unknown"}
+                    </p>
+                  </div>
                 </div>
-              )}
+
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-[#B68B62]/10 p-2.5 text-[#B68B62]">
+                    <Mail size={19} />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500">Email Address</p>
+                    <p className="break-all text-sm font-medium text-gray-700">
+                      {booking.customer?.email || "N/A"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
+                    <CalendarDays size={19} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500">Event Date</p>
+                    <p className="text-sm font-medium text-gray-700">
+                      {booking.eventDate
+                        ? new Date(booking.eventDate).toLocaleDateString(
+                            "en-GB",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )
+                        : "Not specified"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-purple-50 p-2.5 text-purple-600">
+                    <MapPin size={19} />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500">Event Location</p>
+                    <p className="text-sm font-medium text-gray-700">
+                      {booking.eventLocation || "Not specified"}
+                    </p>
+                  </div>
+                </div>
+
+                {booking.message && (
+                  <div className="rounded-xl bg-[#F8F6F0] p-4">
+                    <div className="mb-2 flex items-center gap-2 text-[#244A3B]">
+                      <MessageSquare size={16} />
+                      <p className="text-sm font-semibold">
+                        Customer Message
+                      </p>
+                    </div>
+
+                    <p className="text-sm leading-relaxed text-gray-600">
+                      {booking.message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                {booking.status === "pending" && (
+                  <div className="flex gap-3 border-t border-gray-100 pt-4">
+                    <button
+                      onClick={() =>
+                        updateStatus(booking._id, "accepted")
+                      }
+                      disabled={updatingId === booking._id}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#244A3B] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={17} />
+                      {updatingId === booking._id
+                        ? "Updating..."
+                        : "Accept"}
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        updateStatus(booking._id, "rejected")
+                      }
+                      disabled={updatingId === booking._id}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-full bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <XCircle size={17} />
+                      Reject
+                    </button>
+                  </div>
+                )}
+
+                {booking.status !== "pending" && (
+                  <div className="flex items-center gap-2 border-t border-gray-100 pt-4 text-sm text-gray-500">
+                    {booking.status === "accepted" ? (
+                      <CheckCircle2 size={17} className="text-green-600" />
+                    ) : (
+                      <XCircle size={17} className="text-red-500" />
+                    )}
+
+                    This request has been {booking.status}.
+                  </div>
+                )}
+
+              </div>
             </div>
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }
