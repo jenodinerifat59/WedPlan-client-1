@@ -1,17 +1,36 @@
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-export const api = async (endpoint: string, options?: RequestInit) => {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+export async function api(
+  endpoint: string,
+  options: RequestInit = {},
+  token?: string
+) {
+  const headers = new Headers(options.headers);
 
-  if (!response.ok) {
-    throw new Error("API request failed");
+  if (
+    options.body &&
+    !(options.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
   }
 
-  return response.json();
-};
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers,
+    cache: "no-store",
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "API request failed");
+  }
+
+  return data;
+}

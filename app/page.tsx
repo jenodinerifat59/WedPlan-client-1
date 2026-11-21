@@ -1,4 +1,4 @@
-
+import { api } from "@/lib/api";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -13,35 +13,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 
-const services = [
-  {
-    number: "01",
-    title: "Wedding Planning",
-    description:
-      "From the first idea to the final dance, we take care of every little detail.",
-    image:
-      "https://images.unsplash.com/photo-1519741497674-611481863552?w=900&q=85",
-    tag: "Full Planning",
-  },
-  {
-    number: "02",
-    title: "Venue Selection",
-    description:
-      "Discover beautiful spaces that perfectly match your dream wedding.",
-    image:
-      "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=900&q=85",
-    tag: "Dream Venues",
-  },
-  {
-    number: "03",
-    title: "Photography",
-    description:
-      "Capture every beautiful moment and turn memories into forever.",
-    image:
-      "https://images.unsplash.com/photo-1537633552985-df8429e8048b?w=900&q=85",
-    tag: "Memories",
-  },
-];
 
 const steps = [
   {
@@ -85,60 +56,13 @@ const testimonials = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+   const services = await api("/api/services/featured").catch(() => []);
+
   return (
     <main className="min-h-screen overflow-hidden bg-[#FAF9F6] text-[#203C32]">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b border-[#203C32]/10 bg-[#FAF9F6]/95 backdrop-blur-xl">
-        <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 md:px-10">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#244A3B] text-white">
-              <Heart size={19} />
-            </span>
-            <span className="font-heading text-2xl font-semibold tracking-tight">
-              WedPlan<span className="text-[#B68B62]">.</span>
-            </span>
-          </Link>
-
-          <div className="hidden items-center gap-9 text-sm font-medium text-[#52675E] lg:flex">
-            <Link href="/" className="text-[#244A3B]">
-              Home
-            </Link>
-            <Link href="/services" className="transition hover:text-[#B68B62]">
-              Services
-            </Link>
-            <Link href="/about" className="transition hover:text-[#B68B62]">
-              About Us
-            </Link>
-            <Link href="/contact" className="transition hover:text-[#B68B62]">
-              Contact
-            </Link>
-          </div>
-
-          <div className="hidden items-center gap-5 md:flex">
-            <Link
-              href="/login"
-              className="text-sm font-semibold transition hover:text-[#B68B62]"
-            >
-              Log In
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-full bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382C]"
-            >
-              Get Started <ArrowUpRight className="ml-1 inline" size={15} />
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Open navigation menu"
-            className="rounded-lg border border-[#203C32]/15 p-2 md:hidden"
-          >
-            <Menu size={22} />
-          </button>
-        </nav>
-      </header>
+      
 
       {/* Hero */}
       <section className="relative mx-auto max-w-7xl px-5 pb-16 pt-12 md:px-10 md:pb-24 md:pt-20">
@@ -280,43 +204,44 @@ export default function Home() {
         </div>
 
         <div className="grid gap-7 md:grid-cols-3">
-          {services.map((service) => (
-            <article key={service.number} className="group">
-              <div className="relative mb-6 h-[330px] overflow-hidden rounded-2xl bg-[#E9E5DC]">
-                <Image
-                 height={330}
-                 width = {500}
-                  src={service.image}
-                  alt={service.title}
-                  className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                />
-                <span className="absolute left-5 top-5 rounded-full bg-white/95 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#244A3B]">
-                  {service.tag}
-                </span>
-                <Link
-                  href="/services"
-                  aria-label={`Explore ${service.title}`}
-                  className="absolute bottom-5 right-5 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#244A3B] transition group-hover:bg-[#244A3B] group-hover:text-white"
-                >
-                  <ArrowUpRight size={19} />
-                </Link>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-[#B68B62]">
-                    {service.number}
-                  </p>
-                  <h3 className="font-heading text-2xl font-semibold">
-                    {service.title}
-                  </h3>
-                  <p className="mt-3 max-w-sm text-sm leading-7 text-[#829087]">
-                    {service.description}
-                  </p>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+  {services.map((service: any) => (
+    <Link
+  href={`/services/${service._id}`}
+  key={service._id}
+  className="group block"
+>
+      <div className="relative mb-6 h-[330px] overflow-hidden rounded-2xl">
+        <Image
+          src={service.images?.[0] || "/placeholder.jpg"}
+          alt={service.serviceName}
+          width={500}
+          height={330}
+          className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+        />
+
+        <span className="absolute left-5 top-5 rounded-full bg-white px-4 py-2 text-xs text-[#244A3B]">
+          {service.category}
+        </span>
+      </div>
+
+      <p className="text-xs text-[#B68B62]">
+        {service.location}
+      </p>
+
+      <h3 className="mt-2 font-heading text-2xl font-semibold">
+        {service.serviceName}
+      </h3>
+
+      <p className="mt-3 text-sm text-[#829087]">
+        {service.description}
+      </p>
+
+      <p className="mt-3 font-semibold">
+        ৳{service.price}
+      </p>
+    </Link>
+  ))}
+</div>
       </section>
 
       {/* About / Feature */}
@@ -483,64 +408,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#18382C] px-5 pb-8 pt-16 text-white md:px-10">
-        <div className="mx-auto grid max-w-7xl gap-12 border-b border-white/10 pb-12 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
-                <Heart size={19} />
-              </span>
-              <span className="font-heading text-2xl font-semibold">
-                WedPlan<span className="text-[#D5B795]">.</span>
-              </span>
-            </Link>
-            <p className="mt-6 max-w-sm text-sm leading-7 text-white/55">
-              Bringing beautiful love stories to life, one celebration
-              at a time. Your dream day deserves the perfect plan.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <Link
-                href="/contact"
-                aria-label="Contact WedPlan"
-                className="rounded-full border border-white/20 p-3 transition hover:bg-white/10"
-              >
-                {/* <Instagram size={17} /> */}
-              </Link>
-              <Link
-                href="/services"
-                aria-label="Explore services"
-                className="rounded-full border border-white/20 p-3 transition hover:bg-white/10"
-              >
-                <Heart size={17} />
-              </Link>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="mb-6 text-sm font-semibold">Explore</h3>
-            <div className="space-y-4 text-sm text-white/55">
-              <Link href="/" className="block hover:text-white">Home</Link>
-              <Link href="/services" className="block hover:text-white">Services</Link>
-              <Link href="/about" className="block hover:text-white">About Us</Link>
-              <Link href="/contact" className="block hover:text-white">Contact</Link>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="mb-6 text-sm font-semibold">Get started</h3>
-            <div className="space-y-4 text-sm text-white/55">
-              <Link href="/login" className="block hover:text-white">Login</Link>
-              <Link href="/register" className="block hover:text-white">Create Account</Link>
-              <Link href="/services" className="block hover:text-white">Find Services</Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-4 pt-7 text-xs text-white/40 sm:flex-row">
-          <p>© 2026 WedPlan. All rights reserved.</p>
-          <p>Made with love for your forever.</p>
-        </div>
-      </footer>
+  
     </main>
   );
 }
