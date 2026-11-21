@@ -1,64 +1,100 @@
 
+"use client";
+
 import Link from "next/link";
 import {
   ArrowUpRight,
   Heart,
   Menu,
+  LogOut,
 } from "lucide-react";
-
-
+import { useSession, signOut } from "@/lib/auth-client";
 
 export default function Navbar() {
+  const { data: session, isPending } = useSession();
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-[#203C32]/10 bg-[#FAF9F6]/95 backdrop-blur-xl">
-        <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 md:px-10">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#244A3B] text-white">
-              <Heart size={19} />
-            </span>
-            <span className="font-heading text-2xl font-semibold tracking-tight">
-              WedPlan<span className="text-[#B68B62]">.</span>
-            </span>
+      <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 md:px-10">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#244A3B] text-white">
+            <Heart size={19} />
+          </span>
+
+          <span className="font-heading text-2xl font-semibold tracking-tight">
+            WedPlan<span className="text-[#B68B62]">.</span>
+          </span>
+        </Link>
+
+        <div className="hidden items-center gap-9 text-sm font-medium text-[#52675E] lg:flex">
+          <Link href="/" className="text-[#244A3B]">
+            Home
           </Link>
 
-          <div className="hidden items-center gap-9 text-sm font-medium text-[#52675E] lg:flex">
-            <Link href="/" className="text-[#244A3B]">
-              Home
-            </Link>
-            <Link href="/services" className="transition hover:text-[#B68B62]">
-              Services
-            </Link>
-            <Link href="/about" className="transition hover:text-[#B68B62]">
-              About Us
-            </Link>
-            <Link href="/contact" className="transition hover:text-[#B68B62]">
-              Contact
-            </Link>
-          </div>
+          <Link href="/services" className="transition hover:text-[#B68B62]">
+            Services
+          </Link>
 
-          <div className="hidden items-center gap-5 md:flex">
-            <Link
-              href="/login"
-              className="text-sm font-semibold transition hover:text-[#B68B62]"
-            >
-              Log In
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-full bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382C]"
-            >
-              Get Started <ArrowUpRight className="ml-1 inline" size={15} />
-            </Link>
-          </div>
+          <Link href="/about" className="transition hover:text-[#B68B62]">
+            About Us
+          </Link>
 
-          <button
-            type="button"
-            aria-label="Open navigation menu"
-            className="rounded-lg border border-[#203C32]/15 p-2 md:hidden"
-          >
-            <Menu size={22} />
-          </button>
-        </nav>
-      </header>
+          <Link href="/contact" className="transition hover:text-[#B68B62]">
+            Contact
+          </Link>
+        </div>
+
+        <div className="hidden items-center gap-5 md:flex">
+          {!isPending && (
+            <>
+              {session ? (
+                <>
+                  <span className="text-sm font-medium text-[#244A3B]">
+                    Hi, {session.user.name}
+                  </span>
+
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 rounded-full border border-[#244A3B]/20 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
+                  >
+                    <LogOut size={16} />
+                    Log Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="text-sm font-semibold transition hover:text-[#B68B62]"
+                  >
+                    Log In
+                  </Link>
+
+                  <Link
+                    href="/register"
+                    className="rounded-full bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382C]"
+                  >
+                    Get Started{" "}
+                    <ArrowUpRight className="ml-1 inline" size={15} />
+                  </Link>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        <button
+          type="button"
+          aria-label="Open navigation menu"
+          className="rounded-lg border border-[#203C32]/15 p-2 md:hidden"
+        >
+          <Menu size={22} />
+        </button>
+      </nav>
+    </header>
   );
 }
