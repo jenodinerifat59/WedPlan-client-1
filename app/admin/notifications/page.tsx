@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
@@ -12,10 +12,13 @@ import {
   RefreshCw,
   Loader2,
   Clock,
-  ArrowUpRight,
+  CheckCheck,
+  Trash2,
   AlertCircle,
   CheckCircle2,
   Filter,
+  MailOpen,
+  Mail,
 } from "lucide-react";
 import { getAuthToken } from "@/lib/get-token";
 
@@ -24,162 +27,193 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 type NotificationType = "booking" | "service" | "user" | "payment";
 
 type NotificationItem = {
-  id: string;
+  _id: string;
   type: NotificationType;
   title: string;
-  description: string;
-  date: string;
-  status: string;
+  message: string;
+  relatedId?: string | null;
+  isRead: boolean;
+  createdAt: string;
 };
 
 type FilterType = "all" | NotificationType;
 
 export default function AdminNotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
 
-  const fetchNotifications = async (isRefresh = false) => {
+  const getHeaders = async () => {
+    const token = await getAuthToken();
+
+    if (!token) {
+      throw new Error("Please login first.");
+    }
+
+    return {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+  };
+
+  const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
 
       setError("");
 
-      const token = await getAuthToken();
+      const headers = await getHeaders();
 
-      if (!token) {
-        throw new Error("Please login first.");
+      const response = await fetch(
+        `${API_URL}/api/admin/notifications`,
+        {
+          headers,
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load notifications.");
       }
 
-      const headers = {
-        Authorization: `Bearer ${token}`,
-      };
-
-      const [usersRes, servicesRes, bookingsRes, transactionsRes] =
-        await Promise.all([
-          fetch(`${API_URL}/api/admin/users`, {
-            headers,
-            cache: "no-store",
-          }),
-          fetch(`${API_URL}/api/admin/services`, {
-            headers,
-            cache: "no-store",
-          }),
-          fetch(`${API_URL}/api/admin/bookings`, {
-            headers,
-            cache: "no-store",
-          }),
-          fetch(`${API_URL}/api/admin/transactions`, {
-            headers,
-            cache: "no-store",
-          }),
-        ]);
-
-      const responses = [
-        usersRes,
-        servicesRes,
-        bookingsRes,
-        transactionsRes,
-      ];
-
-      if (responses.some((res) => !res.ok)) {
-        throw new Error("Failed to load notifications.");
-      }
-
-      const [users, services, bookings, transactions] =
-        await Promise.all(responses.map((res) => res.json()));
-
-      const items: NotificationItem[] = [];
-
-      // User Registration Notifications
-      if (Array.isArray(users)) {
-        users.forEach((user: any) => {
-          items.push({
-            id: `user-${user._id}`,
-            type: "user",
-            title: "New User Registered",
-            description: `${user.name || "A new user"} joined WedPlan.`,
-            date: user.createdAt || user.updatedAt || "",
-            status: user.role || "customer",
-          });
-        });
-      }
-
-      // Service Notifications
-      if (Array.isArray(services)) {
-        services.forEach((service: any) => {
-          if (service.status === "pending") {
-            items.push({
-              id: `service-${service._id}`,
-              type: "service",
-              title: "New Service Submission",
-              description: `${service.serviceName || "A service"} is waiting for admin approval.`,
-              date: service.createdAt || "",
-              status: "pending",
-            });
-          }
-        });
-      }
-
-      // Booking Notifications
-      if (Array.isArray(bookings)) {
-        bookings.forEach((booking: any) => {
-          if (booking.status === "pending") {
-            items.push({
-              id: `booking-${booking._id}`,
-              type: "booking",
-              title: "New Booking Request",
-              description: `${booking.customer?.name || "A customer"} requested ${booking.service?.serviceName || "a service"}.`,
-              date: booking.createdAt || "",
-              status: "pending",
-            });
-          }
-        });
-      }
-
-      // Transaction Notifications
-      if (Array.isArray(transactions)) {
-        transactions.forEach((transaction: any) => {
-          items.push({
-            id: `payment-${transaction._id}`,
-            type: "payment",
-            title: "Transaction Activity",
-            description: `${transaction.vendor?.name || "A vendor"} made a ${transaction.plan || "subscription"} transaction.`,
-            date: transaction.createdAt || "",
-            status: transaction.status || "unknown",
-          });
-        });
-      }
-
-      items.sort((a, b) => {
-        return (
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-      });
-
-      setNotifications(items);
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+  }, [fetchNotifications]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      setActionId(id);
+      const headers = await getHeaders();
+
+      const response = await fetch(
+        `${API_URL}/api/admin/notifications/${id}/read`,
+        {
+          method: "PATCH",
+          headers,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update notification.");
+      }
+
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item._id === id ? { ...item, isRead: true } : item
+        )
+      );
+
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      setActionId("all");
+      const headers = await getHeaders();
+
+      const response = await fetch(
+        `${API_URL}/api/admin/notifications/read-all`,
+        {
+          method: "PATCH",
+          headers,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to update notifications.");
+      }
+
+      setNotifications((prev) =>
+        prev.map((item) => ({ ...item, isRead: true }))
+      );
+
+      setUnreadCount(0);
+      setMessage("All notifications marked as read.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this notification?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionId(id);
+      const headers = await getHeaders();
+
+      const response = await fetch(
+        `${API_URL}/api/admin/notifications/${id}`,
+        {
+          method: "DELETE",
+          headers,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to delete notification.");
+      }
+
+      const deleted = notifications.find((item) => item._id === id);
+
+      setNotifications((prev) =>
+        prev.filter((item) => item._id !== id)
+      );
+
+      if (deleted && !deleted.isRead) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+
+      setMessage("Notification deleted successfully.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setActionId(null);
+    }
+  };
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter((item) => {
@@ -187,11 +221,12 @@ export default function AdminNotificationsPage() {
         activeFilter === "all" || item.type === activeFilter;
 
       const searchText =
-        `${item.title} ${item.description} ${item.status}`.toLowerCase();
+        `${item.title} ${item.message} ${item.type}`.toLowerCase();
 
-      const matchesSearch = searchText.includes(search.toLowerCase());
-
-      return matchesFilter && matchesSearch;
+      return (
+        matchesFilter &&
+        searchText.includes(search.toLowerCase())
+      );
     });
   }, [notifications, activeFilter, search]);
 
@@ -205,6 +240,8 @@ export default function AdminNotificationsPage() {
         return Users;
       case "payment":
         return CreditCard;
+      default:
+        return Bell;
     }
   };
 
@@ -218,6 +255,8 @@ export default function AdminNotificationsPage() {
         return "bg-purple-50 text-purple-600";
       case "payment":
         return "bg-green-50 text-green-600";
+      default:
+        return "bg-gray-100 text-gray-600";
     }
   };
 
@@ -238,10 +277,16 @@ export default function AdminNotificationsPage() {
 
   const stats = [
     {
-      label: "Total Activities",
+      label: "Total Notifications",
       value: notifications.length,
       icon: Bell,
       color: "bg-[#244A3B]/10 text-[#244A3B]",
+    },
+    {
+      label: "Unread Notifications",
+      value: unreadCount,
+      icon: Mail,
+      color: "bg-red-50 text-red-600",
     },
     {
       label: "Booking Requests",
@@ -250,21 +295,15 @@ export default function AdminNotificationsPage() {
       color: "bg-blue-50 text-blue-600",
     },
     {
-      label: "Pending Services",
+      label: "Service Submissions",
       value: notifications.filter((n) => n.type === "service").length,
       icon: BriefcaseBusiness,
       color: "bg-amber-50 text-amber-600",
     },
-    {
-      label: "New Users",
-      value: notifications.filter((n) => n.type === "user").length,
-      icon: Users,
-      color: "bg-purple-50 text-purple-600",
-    },
   ];
 
   const filters: { label: string; value: FilterType }[] = [
-    { label: "All Activities", value: "all" },
+    { label: "All", value: "all" },
     { label: "Bookings", value: "booking" },
     { label: "Services", value: "service" },
     { label: "Users", value: "user" },
@@ -296,33 +335,61 @@ export default function AdminNotificationsPage() {
             </h1>
 
             <p className="mt-2 text-sm text-gray-500">
-              Monitor recent activities across your platform.
+              Manage all platform notifications from one place.
+            </p>
+
+            <p className="mt-2 text-sm font-semibold text-[#244A3B]">
+              {unreadCount} unread notifications
             </p>
           </div>
 
-          <button
-            onClick={() => fetchNotifications(true)}
-            disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-[#244A3B] shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
-          >
-            <RefreshCw
-              size={17}
-              className={refreshing ? "animate-spin" : ""}
-            />
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={markAllAsRead}
+              disabled={unreadCount === 0 || actionId !== null}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              <CheckCheck size={17} />
+              Mark All Read
+            </button>
+
+            <button
+              onClick={() => fetchNotifications(true)}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:opacity-60"
+            >
+              <RefreshCw
+                size={17}
+                className={refreshing ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* Error */}
+        {/* Messages */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle size={19} />
             <span>{error}</span>
             <button
-              onClick={() => fetchNotifications()}
-              className="ml-auto font-semibold underline"
+              onClick={() => setError("")}
+              className="ml-auto font-semibold"
             >
-              Retry
+              ✕
+            </button>
+          </div>
+        )}
+
+        {message && (
+          <div className="mb-5 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            <CheckCircle2 size={19} />
+            <span>{message}</span>
+            <button
+              onClick={() => setMessage("")}
+              className="ml-auto font-semibold"
+            >
+              ✕
             </button>
           </div>
         )}
@@ -339,9 +406,7 @@ export default function AdminNotificationsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-500">
-                      {stat.label}
-                    </p>
+                    <p className="text-sm text-gray-500">{stat.label}</p>
                     <h2 className="mt-2 text-3xl font-bold text-[#18382D]">
                       {stat.value}
                     </h2>
@@ -359,16 +424,15 @@ export default function AdminNotificationsPage() {
         {/* Notification List */}
         <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
-          {/* Search and Filter */}
+          {/* Search and Filters */}
           <div className="border-b border-gray-100 p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-
               <div>
                 <h2 className="font-bold text-[#18382D]">
-                  Recent Activities
+                  All Notifications
                 </h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  {filteredNotifications.length} activities found
+                  {filteredNotifications.length} notifications found
                 </p>
               </div>
 
@@ -381,13 +445,12 @@ export default function AdminNotificationsPage() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search activities..."
+                  placeholder="Search notifications..."
                   className="w-full rounded-xl border border-gray-200 bg-[#FAFAF8] py-3 pl-11 pr-4 text-sm outline-none transition focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
                 />
               </div>
             </div>
 
-            {/* Filters */}
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <Filter size={16} className="mr-1 text-gray-400" />
 
@@ -407,7 +470,7 @@ export default function AdminNotificationsPage() {
             </div>
           </div>
 
-          {/* Items */}
+          {/* Notification Items */}
           <div className="divide-y divide-gray-100">
             {filteredNotifications.length > 0 ? (
               filteredNotifications.map((item) => {
@@ -415,8 +478,10 @@ export default function AdminNotificationsPage() {
 
                 return (
                   <div
-                    key={item.id}
-                    className="flex gap-4 p-5 transition hover:bg-[#FAFAF8] sm:px-6"
+                    key={item._id}
+                    className={`flex gap-4 p-5 transition hover:bg-[#FAFAF8] sm:px-6 ${
+                      !item.isRead ? "bg-[#F8FAF7]" : ""
+                    }`}
                   >
                     <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${getIconStyle(item.type)}`}>
                       <Icon size={21} />
@@ -428,27 +493,52 @@ export default function AdminNotificationsPage() {
                           {item.title}
                         </h3>
 
-                        {item.status && (
-                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-gray-600">
-                            {item.status}
+                        {!item.isRead && (
+                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
+                            New
                           </span>
                         )}
+
+                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-gray-600">
+                          {item.type}
+                        </span>
                       </div>
 
                       <p className="mt-1 text-sm leading-6 text-gray-500">
-                        {item.description}
+                        {item.message}
                       </p>
 
                       <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
                         <Clock size={13} />
-                        {getTime(item.date)}
+                        {getTime(item.createdAt)}
                       </div>
                     </div>
 
-                    <ArrowUpRight
-                      size={17}
-                      className="mt-1 shrink-0 text-gray-300"
-                    />
+                    <div className="flex shrink-0 items-start gap-1">
+                      <button
+                        onClick={() => markAsRead(item._id)}
+                        disabled={item.isRead || actionId !== null}
+                        title={item.isRead ? "Already read" : "Mark as read"}
+                        className="rounded-lg p-2 text-gray-400 transition hover:bg-green-50 hover:text-green-600 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {actionId === item._id ? (
+                          <Loader2 size={17} className="animate-spin" />
+                        ) : item.isRead ? (
+                          <MailOpen size={17} />
+                        ) : (
+                          <Mail size={17} />
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => deleteNotification(item._id)}
+                        disabled={actionId !== null}
+                        title="Delete notification"
+                        className="rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -459,11 +549,11 @@ export default function AdminNotificationsPage() {
                 </div>
 
                 <h3 className="font-bold text-[#18382D]">
-                  No Activities Found
+                  No Notifications Found
                 </h3>
 
                 <p className="mt-2 max-w-sm text-sm text-gray-500">
-                  No activities match your current search or filter.
+                  New platform activities will appear here.
                 </p>
               </div>
             )}
@@ -471,7 +561,7 @@ export default function AdminNotificationsPage() {
         </section>
 
         <p className="mt-5 text-center text-xs text-gray-400">
-          Activity information is collected from existing WedPlan records.
+          Notifications are stored and managed through the WedPlan backend.
         </p>
       </div>
     </div>

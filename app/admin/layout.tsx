@@ -14,8 +14,10 @@ import {
   X,
   Home,
   CreditCard,
+  Bell,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { getAuthToken } from "@/lib/get-token";
 
 const navItems = [
   {
@@ -44,6 +46,11 @@ const navItems = [
     icon: CreditCard,
   },
   {
+    name: "Notifications",
+    href: "/admin/notifications",
+    icon: Bell,
+  },
+  {
     name: "Settings",
     href: "/admin/settings",
     icon: Settings,
@@ -56,7 +63,41 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const token = await getAuthToken();
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/notifications`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      setUnreadCount(data.unreadCount || 0);
+    } catch (error) {
+      console.error("Notification count error:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    const interval = setInterval(fetchUnreadCount, 30000);
+
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   return (
     <div className="min-h-screen bg-[#F8F6F0]">
@@ -119,14 +160,29 @@ export default function AdminLayout({
                     key={item.href}
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                    className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
                       active
                         ? "bg-white text-[#18382D] shadow-md"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <Icon size={19} />
-                    {item.name}
+                    <span className="flex items-center gap-3">
+                      <Icon size={19} />
+                      {item.name}
+                    </span>
+
+                    {item.href === "/admin/notifications" &&
+                      unreadCount > 0 && (
+                        <span
+                          className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold ${
+                            active
+                              ? "bg-[#18382D] text-white"
+                              : "bg-red-500 text-white"
+                          }`}
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
                   </Link>
                 );
               })}

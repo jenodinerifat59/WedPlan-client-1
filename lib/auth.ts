@@ -1,3 +1,4 @@
+
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { jwt } from "better-auth/plugins";
@@ -14,12 +15,17 @@ export const auth = betterAuth({
   baseURL,
   secret: process.env.BETTER_AUTH_SECRET,
 
-  // usePlural: true => collections are "users", "sessions", "accounts"
-  database: mongodbAdapter(db, { client: mongoClient, usePlural: true }),
+  database: mongodbAdapter(db, {
+    client: mongoClient,
+    usePlural: true,
+  }),
 
   trustedOrigins: [baseURL, "http://localhost:3000"],
 
-  emailAndPassword: { enabled: true, minPasswordLength: 6 },
+  emailAndPassword: {
+    enabled: true,
+    minPasswordLength: 6,
+  },
 
   socialProviders: {
     google: {
@@ -30,13 +36,33 @@ export const auth = betterAuth({
 
   user: {
     additionalFields: {
-      // input: true so the signup form can send "vendor" or "customer".
-      // The hooks below make sure it can never be "admin".
-      role: { type: "string", required: false, defaultValue: "customer", input: true },
-      isBlocked: { type: "boolean", required: false, defaultValue: false, input: false },
-      businessName: { type: "string", required: false },
-      subscriptionPlan: { type: "string", required: false, defaultValue: "free", input: false },
-      subscriptionExpiresAt: { type: "date", required: false, input: false },
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "customer",
+        input: true,
+      },
+      isBlocked: {
+        type: "boolean",
+        required: false,
+        defaultValue: false,
+        input: false,
+      },
+      businessName: {
+        type: "string",
+        required: false,
+      },
+      subscriptionPlan: {
+        type: "string",
+        required: false,
+        defaultValue: "free",
+        input: false,
+      },
+      subscriptionExpiresAt: {
+        type: "date",
+        required: false,
+        input: false,
+      },
     },
   },
 
@@ -51,20 +77,43 @@ export const auth = betterAuth({
             subscriptionPlan: "free",
           },
         }),
+
+        after: async (user) => {
+          try {
+            await db.collection("notifications").insertOne({
+              type: "user",
+              title: "New User Registered",
+              message: `${user.name || "A new user"} registered as ${user.role || "customer"}.`,
+              relatedId: user.id || null,
+              isRead: false,
+              createdAt: new Date(),
+            });
+          } catch (error) {
+            console.error("User registration notification error:", error);
+          }
+        },
       },
+
       update: {
-        // users cannot change role / block / subscription through profile updates
         before: async (userData) => {
-          const protectedFields = ["role", "isBlocked", "subscriptionPlan", "subscriptionExpiresAt"];
+          const protectedFields = [
+            "role",
+            "isBlocked",
+            "subscriptionPlan",
+            "subscriptionExpiresAt",
+          ];
+
           const safeData = Object.fromEntries(
-            Object.entries(userData).filter(([key]) => !protectedFields.includes(key))
+            Object.entries(userData).filter(
+              ([key]) => !protectedFields.includes(key)
+            )
           );
+
           return { data: safeData };
         },
       },
     },
   },
 
-  // jwt() is required: the Express server verifies tokens from /api/auth/jwks
   plugins: [jwt(), nextCookies()],
 });
