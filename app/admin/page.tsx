@@ -183,7 +183,6 @@ export default function AdminOverviewPage() {
         totalRevenue: Number(overviewData.totalRevenue || 0),
       });
 
-      // Recent Activities
       try {
         const notificationRes = await fetch(
           `${API_URL}/api/admin/notifications`,
@@ -385,10 +384,12 @@ export default function AdminOverviewPage() {
               </div>
             );
 
-            return (
-              <Link href={card.link || "#"} key={card.key}>
+            return card.link ? (
+              <Link href={card.link} key={card.key}>
                 {content}
               </Link>
+            ) : (
+              <div key={card.key}>{content}</div>
             );
           })}
         </div>

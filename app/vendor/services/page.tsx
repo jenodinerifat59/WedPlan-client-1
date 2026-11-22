@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState, useCallback } from "react";
 import {
   Trash2,
   Pencil,
@@ -9,22 +10,24 @@ import {
   Tag,
   ArrowUpRight,
   ImageIcon,
+  BriefcaseBusiness,
+  RefreshCw,
 } from "lucide-react";
 
-import { useEffect, useState } from "react";
 import { getAuthToken } from "@/lib/get-token";
 import { api } from "@/lib/api";
-import {  BriefcaseBusiness, RefreshCw } from "lucide-react";
 
 interface Service {
   _id: string;
   title: string;
+  serviceName?: string;
   category: string;
   location: string;
   price: number;
   description: string;
   status: string;
   isActive: boolean;
+  images?: string[];
 }
 
 export default function VendorServicesPage() {
@@ -33,40 +36,38 @@ export default function VendorServicesPage() {
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
-  
+  const fetchServices = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
+      const token = await getAuthToken();
 
-const fetchServices = async () => {
-  try {
-    setLoading(true);
-    setError("");
+      if (!token) {
+        throw new Error("Authentication token not found. Please login again.");
+      }
 
-    const token = await getAuthToken();
+      const result = await api(
+        "/api/vendor/services",
+        { method: "GET" },
+        token
+      );
 
-    const result = await api(
-      "/api/vendor/services",
-      { method: "GET" },
-      token
-    );
-
-    // Backend সরাসরি Array return করে
-    setServices(Array.isArray(result) ? result : []);
-
-  } catch (err) {
-    setError(
-      err instanceof Error
-        ? err.message
-        : "Failed to load services"
-    );
-  } finally {
-    setLoading(false);
-  }
-};
-
+      setServices(Array.isArray(result) ? result : []);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load services"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchServices();
-  }, []);
+  }, [fetchServices]);
 
   const deleteService = async (id: string) => {
     const confirmed = window.confirm(
@@ -102,170 +103,204 @@ const fetchServices = async () => {
 
   return (
     <div>
-      <div className="flex justify-between items-center flex-wrap gap-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#18382D]">
             My Services
           </h1>
 
-          <p className="text-gray-500 mt-2">
+          <p className="mt-2 text-gray-500">
             Manage your wedding services.
           </p>
         </div>
 
         <button
           onClick={fetchServices}
-          className="flex items-center gap-2 border border-[#18382D] text-[#18382D] px-4 py-2 rounded-lg hover:bg-[#18382D] hover:text-white"
+          disabled={loading}
+          className="flex items-center gap-2 rounded-lg border border-[#18382D] px-4 py-2 text-[#18382D] transition hover:bg-[#18382D] hover:text-white disabled:opacity-50"
         >
-          <RefreshCw size={17} />
+          <RefreshCw
+            size={17}
+            className={loading ? "animate-spin" : ""}
+          />
           Refresh
         </button>
       </div>
 
+      {/* Loading */}
       {loading && (
-        <p className="text-center py-16 text-gray-500">
+        <p className="py-16 text-center text-gray-500">
           Loading your services...
         </p>
       )}
 
+      {/* Error */}
       {error && !loading && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mt-8">
+        <div className="mt-8 rounded-lg bg-red-50 p-4 text-red-600">
           {error}
+
           <button
             onClick={fetchServices}
-            className="underline ml-2"
+            className="ml-2 underline"
           >
             Try again
           </button>
         </div>
       )}
 
+      {/* Empty State */}
       {!loading && !error && services.length === 0 && (
-        <div className="bg-white border rounded-xl p-10 mt-8 text-center">
+        <div className="mt-8 rounded-xl border bg-white p-10 text-center">
           <BriefcaseBusiness
             size={45}
             className="mx-auto text-[#B68B62]"
           />
 
-          <h2 className="text-xl font-semibold text-[#18382D] mt-4">
+          <h2 className="mt-4 text-xl font-semibold text-[#18382D]">
             No Services Found
           </h2>
 
-          <p className="text-gray-500 mt-2">
+          <p className="mt-2 text-gray-500">
             You have not added any services yet.
           </p>
         </div>
       )}
 
+      {/* Services Grid */}
       {!loading && !error && services.length > 0 && (
-       
-<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
-  {services.map((service) => (
-    <div
-      key={service._id}
-      className="group bg-white rounded-2xl overflow-hidden border border-[#EAE8E0] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-    >
-      {/* Service Image */}
-      <div className="relative h-52 bg-[#F1F0EA] overflow-hidden">
-        {service.images?.[0] ? (
-          <img
-            src={service.images[0]}
-            alt={service.serviceName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon size={45} className="text-gray-400" />
-          </div>
-        )}
+        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {services.map((service) => {
+            const serviceTitle =
+              service.title || service.serviceName || "Untitled Service";
 
-        {/* Status Badge */}
-        <span
-          className={`absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-semibold capitalize backdrop-blur-md ${
-            service.status === "approved"
-              ? "bg-green-100/95 text-green-800"
-              : service.status === "pending"
-                ? "bg-amber-100/95 text-amber-800"
-                : "bg-red-100/95 text-red-700"
-          }`}
-        >
-          {service.status}
-        </span>
+            const serviceImages = Array.isArray(service.images)
+              ? service.images
+              : [];
 
-        {/* Active Status */}
-        <span
-          className={`absolute bottom-4 left-4 px-3 py-1.5 rounded-full text-xs font-medium ${
-            service.isActive
-              ? "bg-[#18382D]/90 text-white"
-              : "bg-gray-800/80 text-white"
-          }`}
-        >
-          {service.isActive ? "● Active" : "● Inactive"}
-        </span>
-      </div>
+            return (
+              <div
+                key={service._id}
+                className="group overflow-hidden rounded-2xl border border-[#EAE8E0] bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+              >
+                {/* Service Image */}
+                <div className="relative h-52 overflow-hidden bg-[#F1F0EA]">
+                  {serviceImages[0] ? (
+                    <img
+                      src={serviceImages[0]}
+                      alt={serviceTitle}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon
+                        size={45}
+                        className="text-gray-400"
+                      />
+                    </div>
+                  )}
 
-      {/* Service Details */}
-      <div className="p-5">
-        {/* Category */}
-        <div className="flex items-center gap-2 text-[#B68B62] text-xs font-semibold mb-3">
-          <Tag size={14} />
-          <span>{service.category}</span>
+                  {/* Status Badge */}
+                  <span
+                    className={`absolute right-4 top-4 rounded-full px-3 py-1.5 text-xs font-semibold capitalize backdrop-blur-md ${
+                      service.status === "approved"
+                        ? "bg-green-100/95 text-green-800"
+                        : service.status === "pending"
+                          ? "bg-amber-100/95 text-amber-800"
+                          : "bg-red-100/95 text-red-700"
+                    }`}
+                  >
+                    {service.status}
+                  </span>
+
+                  {/* Active Status */}
+                  <span
+                    className={`absolute bottom-4 left-4 rounded-full px-3 py-1.5 text-xs font-medium ${
+                      service.isActive
+                        ? "bg-[#18382D]/90 text-white"
+                        : "bg-gray-800/80 text-white"
+                    }`}
+                  >
+                    {service.isActive ? "● Active" : "● Inactive"}
+                  </span>
+                </div>
+
+                {/* Service Details */}
+                <div className="p-5">
+                  {/* Category */}
+                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-[#B68B62]">
+                    <Tag size={14} />
+                    <span>{service.category}</span>
+                  </div>
+
+                  {/* Title */}
+                  <h2 className="line-clamp-1 text-xl font-bold text-[#18382D] transition-colors group-hover:text-[#B68B62]">
+                    {serviceTitle}
+                  </h2>
+
+                  {/* Description */}
+                  <p className="mt-3 line-clamp-2 min-h-12 text-sm leading-6 text-gray-500">
+                    {service.description}
+                  </p>
+
+                  {/* Location */}
+                  <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
+                    <MapPin
+                      size={16}
+                      className="shrink-0 text-[#B68B62]"
+                    />
+                    <span className="truncate">
+                      {service.location}
+                    </span>
+                  </div>
+
+                  {/* Price */}
+                  <div className="mt-5 flex items-center justify-between rounded-xl bg-[#F8F6F0] p-4">
+                    <div>
+                      <p className="text-xs text-gray-500">
+                        Service Price
+                      </p>
+
+                      <p className="mt-1 text-2xl font-bold text-[#18382D]">
+                        ৳{Number(service.price || 0).toLocaleString("en-BD")}
+                      </p>
+                    </div>
+
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8EFE9]">
+                      <ArrowUpRight
+                        className="text-[#244A3B]"
+                        size={20}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <Link
+                      href={`/vendor/services/edit/${service._id}`}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-[#18382D] py-2.5 text-sm font-medium text-white transition hover:bg-[#244A3B]"
+                    >
+                      <Pencil size={16} />
+                      Edit
+                    </Link>
+
+                    <button
+                      onClick={() => deleteService(service._id)}
+                      disabled={deletingId === service._id}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-red-50 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <Trash2 size={16} />
+
+                      {deletingId === service._id
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-
-        {/* Title */}
-        <h2 className="text-xl font-bold text-[#18382D] line-clamp-1 group-hover:text-[#B68B62] transition-colors">
-          {service.serviceName}
-        </h2>
-
-        {/* Description */}
-        <p className="text-sm text-gray-500 mt-3 leading-6 line-clamp-2 min-h-12">
-          {service.description}
-        </p>
-
-        {/* Location */}
-        <div className="flex items-center gap-2 mt-4 text-sm text-gray-500">
-          <MapPin size={16} className="text-[#B68B62] shrink-0" />
-          <span className="truncate">{service.location}</span>
-        </div>
-
-        {/* Price */}
-        <div className="mt-5 bg-[#F8F6F0] rounded-xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-500">Service Price</p>
-            <p className="text-2xl font-bold text-[#18382D] mt-1">
-              ৳{service.price?.toLocaleString("en-BD")}
-            </p>
-          </div>
-
-          <div className="w-10 h-10 rounded-full bg-[#E8EFE9] flex items-center justify-center">
-            <ArrowUpRight className="text-[#244A3B]" size={20} />
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3 mt-5">
-          <Link
-            href={`/vendor/services/edit/${service._id}`}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#18382D] text-white text-sm font-medium hover:bg-[#244A3B] transition"
-          >
-            <Pencil size={16} />
-            Edit
-          </Link>
-
-          <button
-            onClick={() => deleteService(service._id)}
-            disabled={deletingId === service._id}
-            className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition disabled:opacity-50"
-          >
-            <Trash2 size={16} />
-            {deletingId === service._id ? "Deleting..." : "Delete"}
-          </button>
-        </div>
-      </div>
-    </div>
-  ))}
-</div>
-
       )}
     </div>
   );
