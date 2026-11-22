@@ -1,64 +1,105 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   RefreshCw,
-  LoaderCircle,
-  CheckCircle2,
-  XCircle,
-  Trash2,
-  BriefcaseBusiness,
+  CalendarDays,
   MapPin,
-  Tag,
-  DollarSign,
+  UserRound,
+  Store,
+  Eye,
+  X,
+  Loader2,
+  AlertCircle,
+  ClipboardList,
+  Save,
+  CheckCircle2,
 } from "lucide-react";
 import { getAuthToken } from "@/lib/get-token";
 
-type Service = {
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+type Booking = {
   _id: string;
-  serviceName?: string;
-  name?: string;
-  category?: string;
-  price?: number | string;
-  location?: string;
-  description?: string;
-  image?: string;
-  images?: string[];
-  status?: string;
-  vendor?: {
+  serviceId?: string;
+  customerId?: string;
+  vendorId?: string;
+  eventDate?: string;
+  eventLocation?: string;
+  message?: string;
+  status: string;
+  createdAt?: string;
+  service?: {
+    serviceName?: string;
+    category?: string;
+    price?: number | string;
+    image?: string;
+  };
+  customer?: {
     name?: string;
     email?: string;
   };
-  vendorName?: string;
-  vendorEmail?: string;
-  createdAt?: string;
+  vendor?: {
+    name?: string;
+    email?: string;
+    businessName?: string;
+  };
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const statusStyles: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700",
+  confirmed: "bg-blue-50 text-blue-700",
+  approved: "bg-blue-50 text-blue-700",
+  completed: "bg-emerald-50 text-emerald-700",
+  cancelled: "bg-red-50 text-red-700",
+  rejected: "bg-red-50 text-red-700",
+};
 
-export default function AdminServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
+const availableStatuses = [
+  "pending",
+  "confirmed",
+  "completed",
+  "cancelled",
+];
+
+export default function AdminBookingsPage() {
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [message, setMessage] = useState("");
+  const [selectedBooking, setSelectedBooking] =
+    useState<Booking | null>(null);
 
-  const fetchServices = useCallback(async () => {
+  const [updating, setUpdating] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const fetchBookings = useCallback(async () => {
     try {
       setLoading(true);
-      setMessage("");
+      setError("");
 
       const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("Authentication token not found. Please login again.");
+      }
+
       const params = new URLSearchParams();
 
-      if (search.trim()) params.set("q", search.trim());
-      if (status !== "all") params.set("status", status);
+      if (status !== "all") {
+        params.set("status", status);
+      }
+
+      if (search.trim()) {
+        params.set("q", search.trim());
+      }
 
       const response = await fetch(
-        `${API_URL}/api/admin/services?${params.toString()}`,
+        `${API_URL}/api/admin/bookings?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -67,326 +108,529 @@ export default function AdminServicesPage() {
         }
       );
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || "Failed to load services.");
+        throw new Error("Failed to load bookings.");
       }
 
-      setServices(Array.isArray(data) ? data : []);
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Something went wrong."
+      const data = await response.json();
+
+      setBookings(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setLoading(false);
     }
-  }, [search, status]);
+  }, [status, search]);
 
   useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+    const timeout = setTimeout(() => {
+      fetchBookings();
+    }, 300);
 
-  const updateStatus = async (
-    serviceId: string,
-    nextStatus: "approved" | "rejected"
-  ) => {
-    if (!window.confirm(`Are you sure you want to ${nextStatus} this service?`)) {
+    return () => clearTimeout(timeout);
+  }, [fetchBookings]);
+
+  const stats = useMemo(() => {
+    return {
+      total: bookings.length,
+      pending: bookings.filter((b) => b.status === "pending").length,
+      confirmed: bookings.filter(
+        (b) => ["confirmed", "approved"].includes(b.status)
+      ).length,
+      completed: bookings.filter((b) => b.status === "completed").length,
+    };
+  }, [bookings]);
+
+  const formatDate = (date?: string) => {
+    if (!date) return "Not specified";
+
+    const parsed = new Date(date);
+
+    if (Number.isNaN(parsed.getTime())) return date;
+
+    return parsed.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getStatusStyle = (value: string) => {
+    return statusStyles[value?.toLowerCase()] || "bg-gray-100 text-gray-600";
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!selectedBooking || !updateStatus) return;
+
+    if (updateStatus === selectedBooking.status) {
+      setError("Please select a different status.");
       return;
     }
 
     try {
-      setUpdating(serviceId);
-      setMessage("");
+      setUpdating(true);
+      setError("");
+      setSuccessMessage("");
 
       const token = await getAuthToken();
 
+      if (!token) {
+        throw new Error("Authentication token not found.");
+      }
+
       const response = await fetch(
-        `${API_URL}/api/admin/services/${serviceId}/status`,
+        `${API_URL}/api/admin/bookings/${selectedBooking._id}/status`,
         {
           method: "PATCH",
           headers: {
+            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ status: nextStatus }),
+          body: JSON.stringify({
+            status: updateStatus,
+          }),
         }
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Could not update service.");
+        throw new Error(data.message || "Failed to update booking status.");
       }
 
-      setMessage(data.message || "Service updated successfully.");
-      await fetchServices();
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Something went wrong."
+      const updatedBooking = {
+        ...selectedBooking,
+        status: updateStatus,
+      };
+
+      setBookings((previous) =>
+        previous.map((booking) =>
+          booking._id === selectedBooking._id
+            ? updatedBooking
+            : booking
+        )
+      );
+
+      setSelectedBooking(updatedBooking);
+      setSuccessMessage("Booking status updated successfully.");
+
+      await fetchBookings();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
-      setUpdating(null);
+      setUpdating(false);
     }
   };
 
-  const deleteService = async (serviceId: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this service?")) {
-      return;
-    }
-
-    try {
-      setUpdating(serviceId);
-      setMessage("");
-
-      const token = await getAuthToken();
-
-      const response = await fetch(
-        `${API_URL}/api/admin/services/${serviceId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Could not delete service.");
-      }
-
-      setServices((previous) =>
-        previous.filter((service) => service._id !== serviceId)
-      );
-
-      setMessage(data.message || "Service deleted successfully.");
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Something went wrong."
-      );
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const getImage = (service: Service) =>
-    service.image || service.images?.[0] || "";
-
-  const getServiceName = (service: Service) =>
-    service.serviceName || service.name || "Untitled Service";
-
-  const statusStyle = (value?: string) => {
-    switch (value) {
-      case "approved":
-        return "bg-emerald-50 text-emerald-700";
-      case "rejected":
-        return "bg-red-50 text-red-600";
-      default:
-        return "bg-amber-50 text-amber-700";
-    }
+  const openDetails = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setUpdateStatus(booking.status);
+    setError("");
+    setSuccessMessage("");
   };
 
   return (
-    <div className="space-y-8">
+    <div className="min-h-screen space-y-7 bg-[#FAF9F6] p-4 sm:p-6 lg:p-8">
       {/* Header */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <p className="text-sm font-semibold tracking-wider text-[#B68B62]">
-            PLATFORM MANAGEMENT
+          <p className="text-sm font-semibold tracking-wide text-[#B68B62]">
+            WEDPLAN ADMINISTRATION
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-[#18382D]">
-            Manage Services
+
+          <h1 className="mt-1 text-2xl font-bold text-[#18382D] sm:text-3xl">
+            Manage Bookings
           </h1>
+
           <p className="mt-2 text-sm text-gray-500">
-            Review, approve and manage vendor services.
+            View and manage all customer booking requests.
           </p>
         </div>
 
         <button
-          onClick={fetchServices}
+          onClick={fetchBookings}
           disabled={loading}
-          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-[#18382D] transition hover:bg-gray-50"
+          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#244A3B] shadow-sm hover:bg-gray-50 disabled:opacity-60"
         >
-          <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           Refresh
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:flex-row">
-        <div className="relative flex-1">
-          <Search
-            size={19}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search services..."
-            className="w-full rounded-xl border border-gray-200 py-3 pl-12 pr-4 text-sm outline-none focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
-          />
-        </div>
+      {/* Statistics */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {[
+          {
+            title: "Total Bookings",
+            value: stats.total,
+            color: "text-[#244A3B]",
+            icon: ClipboardList,
+          },
+          {
+            title: "Pending",
+            value: stats.pending,
+            color: "text-amber-600",
+            icon: CalendarDays,
+          },
+          {
+            title: "Confirmed",
+            value: stats.confirmed,
+            color: "text-blue-600",
+            icon: UserRound,
+          },
+          {
+            title: "Completed",
+            value: stats.completed,
+            color: "text-emerald-600",
+            icon: Store,
+          },
+        ].map((item) => {
+          const Icon = item.icon;
 
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[#244A3B]"
-        >
-          <option value="all">All Services</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
+          return (
+            <div
+              key={item.title}
+              className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-500">
+                  {item.title}
+                </p>
+                <Icon size={20} className={item.color} />
+              </div>
+
+              <h2 className={`mt-3 text-3xl font-bold ${item.color}`}>
+                {item.value}
+              </h2>
+            </div>
+          );
+        })}
       </div>
 
-      {message && (
-        <div className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm text-[#244A3B]">
-          {message}
+      {/* Search and Filter */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row">
+          <div className="relative flex-1">
+            <Search
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search customer, vendor, service or booking ID..."
+              className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
+            />
+          </div>
+
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#244A3B]"
+          >
+            <option value="all">All Bookings</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="approved">Approved</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+          <AlertCircle size={19} />
+          {error}
         </div>
       )}
 
-      {/* Service List */}
-      {loading ? (
-        <div className="flex min-h-64 items-center justify-center">
-          <LoaderCircle size={32} className="animate-spin text-[#244A3B]" />
-        </div>
-      ) : services.length === 0 ? (
-        <div className="rounded-2xl border border-gray-100 bg-white py-20 text-center shadow-sm">
-          <BriefcaseBusiness size={42} className="mx-auto text-gray-300" />
-          <h3 className="mt-4 font-semibold text-gray-700">
-            No services found
-          </h3>
-          <p className="mt-2 text-sm text-gray-400">
-            Try another search or status filter.
+      {/* Booking List */}
+      <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="border-b border-gray-100 p-5">
+          <h2 className="font-bold text-[#18382D]">All Booking Requests</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            {bookings.length} booking(s) found
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          {services.map((service) => {
-            const image = getImage(service);
-            const name = getServiceName(service);
 
-            return (
-              <div
-                key={service._id}
-                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
-              >
-                <div className="flex flex-col sm:flex-row">
-                  {/* Image */}
-                  <div className="h-52 bg-[#F0F1EC] sm:h-auto sm:w-44 sm:shrink-0">
-                    {image ? (
-                      <img
-                        src={image}
-                        alt={name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full min-h-44 items-center justify-center text-gray-300">
-                        <BriefcaseBusiness size={42} />
-                      </div>
-                    )}
-                  </div>
+        {loading ? (
+          <div className="flex min-h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-[#244A3B]" />
+          </div>
+        ) : bookings.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left">
+              <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-5 py-4">Service</th>
+                  <th className="px-5 py-4">Customer</th>
+                  <th className="px-5 py-4">Vendor</th>
+                  <th className="px-5 py-4">Event Date</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4 text-right">Action</th>
+                </tr>
+              </thead>
 
-                  {/* Content */}
-                  <div className="min-w-0 flex-1 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <Tag size={13} />
-                        {service.category || "Uncategorized"}
-                      </span>
+              <tbody className="divide-y divide-gray-100">
+                {bookings.map((booking) => (
+                  <tr key={booking._id} className="transition hover:bg-gray-50">
+                    <td className="px-5 py-4">
+                      <p className="font-semibold text-[#18382D]">
+                        {booking.service?.serviceName || "Unknown Service"}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {booking.service?.category || "No category"}
+                      </p>
+                    </td>
 
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        {booking.customer?.name || "Unknown Customer"}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {booking.customer?.email || "No email"}
+                      </p>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        {booking.vendor?.businessName ||
+                          booking.vendor?.name ||
+                          "Unknown Vendor"}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {booking.vendor?.email || ""}
+                      </p>
+                    </td>
+
+                    <td className="px-5 py-4 text-sm text-gray-600">
+                      {formatDate(booking.eventDate)}
+                    </td>
+
+                    <td className="px-5 py-4">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusStyle(service.status)}`}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
+                          booking.status
+                        )}`}
                       >
-                        {service.status || "pending"}
+                        {booking.status}
                       </span>
-                    </div>
+                    </td>
 
-                    <h2 className="mt-3 text-lg font-bold text-[#18382D]">
-                      {name}
-                    </h2>
-
-                    {service.description && (
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">
-                        {service.description}
-                      </p>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <DollarSign size={14} />
-                        {service.price ?? "Price not set"}
-                      </span>
-
-                      {service.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin size={14} />
-                          {service.location}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-4 border-t border-gray-100 pt-3">
-                      <p className="text-xs text-gray-400">Service Vendor</p>
-                      <p className="mt-1 text-sm font-semibold text-[#18382D]">
-                        {service.vendor?.name ||
-                          service.vendorName ||
-                          "Vendor"}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {service.vendor?.email || service.vendorEmail || ""}
-                      </p>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {service.status !== "approved" && (
-                        <button
-                          onClick={() =>
-                            updateStatus(service._id, "approved")
-                          }
-                          disabled={updating === service._id}
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
-                        >
-                          <CheckCircle2 size={15} />
-                          Approve
-                        </button>
-                      )}
-
-                      {service.status !== "rejected" && (
-                        <button
-                          onClick={() =>
-                            updateStatus(service._id, "rejected")
-                          }
-                          disabled={updating === service._id}
-                          className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
-                        >
-                          <XCircle size={15} />
-                          Reject
-                        </button>
-                      )}
-
+                    <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => deleteService(service._id)}
-                        disabled={updating === service._id}
-                        className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                        onClick={() => openDetails(booking)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#244A3B]/10 px-3 py-2 text-xs font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
                       >
-                        {updating === service._id ? (
-                          <LoaderCircle size={14} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={14} />
-                        )}
-                        Delete
+                        <Eye size={15} />
+                        Details
                       </button>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-5 py-16 text-center">
+            <ClipboardList className="mx-auto h-10 w-10 text-gray-300" />
+            <h3 className="mt-3 font-semibold text-gray-600">
+              No bookings found
+            </h3>
+            <p className="mt-1 text-sm text-gray-400">
+              Try changing your search or status filter.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* Booking Details Modal */}
+      {selectedBooking && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedBooking(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 p-5">
+              <div>
+                <p className="text-xs font-semibold text-[#B68B62]">
+                  BOOKING DETAILS
+                </p>
+                <h2 className="mt-1 text-xl font-bold text-[#18382D]">
+                  Booking Information
+                </h2>
+              </div>
+
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5">
+              <div className="rounded-xl bg-[#FAF9F6] p-4">
+                <p className="text-xs text-gray-500">Booking ID</p>
+                <p className="mt-1 break-all text-sm font-semibold text-[#18382D]">
+                  {selectedBooking._id}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-gray-400">Service</p>
+                  <p className="mt-1 font-semibold text-[#18382D]">
+                    {selectedBooking.service?.serviceName || "Unknown"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Category</p>
+                  <p className="mt-1 font-semibold text-gray-700">
+                    {selectedBooking.service?.category || "Not available"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Customer</p>
+                  <p className="mt-1 font-semibold text-gray-700">
+                    {selectedBooking.customer?.name || "Unknown"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {selectedBooking.customer?.email || ""}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Vendor</p>
+                  <p className="mt-1 font-semibold text-gray-700">
+                    {selectedBooking.vendor?.businessName ||
+                      selectedBooking.vendor?.name ||
+                      "Unknown"}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {selectedBooking.vendor?.email || ""}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Event Date</p>
+                  <p className="mt-1 flex items-center gap-2 font-semibold text-gray-700">
+                    <CalendarDays size={16} />
+                    {formatDate(selectedBooking.eventDate)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Event Location</p>
+                  <p className="mt-1 flex items-center gap-2 font-semibold text-gray-700">
+                    <MapPin size={16} />
+                    {selectedBooking.eventLocation || "Not specified"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Current Status</p>
+                  <span
+                    className={`mt-2 inline-block rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
+                      selectedBooking.status
+                    )}`}
+                  >
+                    {selectedBooking.status}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-400">Created At</p>
+                  <p className="mt-1 font-semibold text-gray-700">
+                    {formatDate(selectedBooking.createdAt)}
+                  </p>
                 </div>
               </div>
-            );
-          })}
+
+              <div>
+                <p className="text-xs text-gray-400">Customer Message</p>
+                <p className="mt-2 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-600">
+                  {selectedBooking.message || "No message provided."}
+                </p>
+              </div>
+
+              {/* Update Booking Status */}
+              <div className="rounded-xl border border-gray-100 bg-[#FAF9F6] p-4">
+                <h3 className="font-bold text-[#18382D]">
+                  Update Booking Status
+                </h3>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Select a new status for this booking.
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <select
+                    value={updateStatus}
+                    onChange={(e) => setUpdateStatus(e.target.value)}
+                    disabled={updating}
+                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#244A3B] disabled:opacity-60"
+                  >
+                    {availableStatuses.map((item) => (
+                      <option key={item} value={item}>
+                        {item.charAt(0).toUpperCase() + item.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={handleStatusUpdate}
+                    disabled={
+                      updating ||
+                      updateStatus === selectedBooking.status
+                    }
+                    className="flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {updating ? (
+                      <Loader2 size={17} className="animate-spin" />
+                    ) : (
+                      <Save size={17} />
+                    )}
+                    {updating ? "Updating..." : "Update Status"}
+                  </button>
+                </div>
+
+                {successMessage && (
+                  <p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-600">
+                    <CheckCircle2 size={16} />
+                    {successMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-gray-100 p-5">
+              <button
+                onClick={() => {
+                  setSelectedBooking(null);
+                  setSuccessMessage("");
+                  setError("");
+                }}
+                className="rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#18382D]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

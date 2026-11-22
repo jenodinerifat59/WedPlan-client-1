@@ -12,6 +12,8 @@ import {
   CreditCard,
   Bell,
   RefreshCw,
+  CalendarDays,
+  DollarSign,
   ArrowUpRight,
   Activity,
   Loader2,
@@ -28,6 +30,8 @@ type OverviewData = {
   totalServices: number;
   pendingServices: number;
   transactions: number;
+  totalBookings: number;
+  totalRevenue: number;
 };
 
 type Notification = {
@@ -78,6 +82,18 @@ const statCards = [
     color: "bg-pink-50 text-pink-600",
     link: "/admin/transactions",
   },
+  {
+    key: "totalBookings",
+    title: "Total Bookings",
+    icon: CalendarDays,
+    color: "bg-blue-50 text-blue-600",
+  },
+  {
+    key: "totalRevenue",
+    title: "Total Revenue",
+    icon: DollarSign,
+    color: "bg-emerald-50 text-emerald-600",
+  },
 ] as const;
 
 export default function AdminOverviewPage() {
@@ -110,10 +126,10 @@ export default function AdminOverviewPage() {
         throw new Error("Failed to load dashboard information.");
       }
 
-      const overviewData = await overviewRes.json();
+      const overviewData: OverviewData = await overviewRes.json();
       setOverview(overviewData);
 
-      // Recent activities from the notifications API
+      // Recent activities
       try {
         const notificationRes = await fetch(
           `${API_URL}/api/admin/notifications`,
@@ -135,9 +151,7 @@ export default function AdminOverviewPage() {
       }
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setLoading(false);
@@ -190,10 +204,13 @@ export default function AdminOverviewPage() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center">
           <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
+
           <h2 className="mt-4 text-lg font-bold text-gray-800">
             Dashboard Loading Failed
           </h2>
+
           <p className="mt-2 text-sm text-gray-500">{error}</p>
+
           <button
             onClick={fetchDashboard}
             className="mt-5 rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#18382D]"
@@ -246,15 +263,22 @@ export default function AdminOverviewPage() {
       <section>
         <div className="mb-4 flex items-center gap-2">
           <Activity size={19} className="text-[#B68B62]" />
+
           <h2 className="text-lg font-bold text-[#18382D]">
             Platform Statistics
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {statCards.map((card) => {
             const Icon = card.icon;
-            const value = overview?.[card.key] ?? 0;
+
+            const rawValue = overview?.[card.key] ?? 0;
+
+            const value =
+              card.key === "totalRevenue"
+                ? `$${Number(rawValue).toFixed(2)}`
+                : Number(rawValue).toLocaleString();
 
             const content = (
               <div className="flex h-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -263,8 +287,8 @@ export default function AdminOverviewPage() {
                     {card.title}
                   </p>
 
-                  <h3 className="mt-2 text-3xl font-bold text-[#18382D]">
-                    {value.toLocaleString()}
+                  <h3 className="mt-2 text-2xl font-bold text-[#18382D] sm:text-3xl">
+                    {value}
                   </h3>
 
                   <p className="mt-2 text-xs text-gray-400">
@@ -363,6 +387,7 @@ export default function AdminOverviewPage() {
             <h2 className="font-bold text-[#18382D]">
               Recent Activities
             </h2>
+
             <p className="mt-1 text-xs text-gray-500">
               Latest updates from your platform
             </p>
@@ -423,6 +448,7 @@ export default function AdminOverviewPage() {
           ) : (
             <div className="px-5 py-12 text-center">
               <Bell className="mx-auto h-9 w-9 text-gray-300" />
+
               <p className="mt-3 text-sm font-medium text-gray-500">
                 No recent activities found.
               </p>
