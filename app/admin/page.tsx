@@ -18,6 +18,7 @@ import {
   Activity,
   Loader2,
   AlertCircle,
+  Settings,
 } from "lucide-react";
 import { getAuthToken } from "@/lib/get-token";
 
@@ -87,14 +88,55 @@ const statCards = [
     title: "Total Bookings",
     icon: CalendarDays,
     color: "bg-blue-50 text-blue-600",
+    link: "/admin/bookings",
   },
   {
     key: "totalRevenue",
     title: "Total Revenue",
     icon: DollarSign,
     color: "bg-emerald-50 text-emerald-600",
+    link: "/admin/transactions",
   },
 ] as const;
+
+const quickActions = [
+  {
+    title: "Manage Users",
+    description: "View, search and manage platform users.",
+    href: "/admin/users",
+    icon: Users,
+  },
+  {
+    title: "Manage Services",
+    description: "Review and approve vendor services.",
+    href: "/admin/services",
+    icon: Store,
+  },
+  {
+    title: "Manage Bookings",
+    description: "Review and manage customer bookings.",
+    href: "/admin/bookings",
+    icon: CalendarDays,
+  },
+  {
+    title: "Notifications",
+    description: "Check recent platform activities.",
+    href: "/admin/notifications",
+    icon: Bell,
+  },
+  {
+    title: "Transactions",
+    description: "Monitor subscription transactions.",
+    href: "/admin/transactions",
+    icon: CreditCard,
+  },
+  {
+    title: "Admin Settings",
+    description: "Manage your profile and platform settings.",
+    href: "/admin/settings",
+    icon: Settings,
+  },
+];
 
 export default function AdminOverviewPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null);
@@ -122,14 +164,26 @@ export default function AdminOverviewPage() {
         cache: "no-store",
       });
 
+      const overviewData = await overviewRes.json();
+
       if (!overviewRes.ok) {
-        throw new Error("Failed to load dashboard information.");
+        throw new Error(
+          overviewData.message || "Failed to load dashboard information."
+        );
       }
 
-      const overviewData: OverviewData = await overviewRes.json();
-      setOverview(overviewData);
+      setOverview({
+        totalUsers: Number(overviewData.totalUsers || 0),
+        vendors: Number(overviewData.vendors || 0),
+        customers: Number(overviewData.customers || 0),
+        totalServices: Number(overviewData.totalServices || 0),
+        pendingServices: Number(overviewData.pendingServices || 0),
+        transactions: Number(overviewData.transactions || 0),
+        totalBookings: Number(overviewData.totalBookings || 0),
+        totalRevenue: Number(overviewData.totalRevenue || 0),
+      });
 
-      // Recent activities
+      // Recent Activities
       try {
         const notificationRes = await fetch(
           `${API_URL}/api/admin/notifications`,
@@ -143,11 +197,16 @@ export default function AdminOverviewPage() {
           const notificationData = await notificationRes.json();
 
           setNotifications(
-            (notificationData.notifications || []).slice(0, 6)
+            Array.isArray(notificationData.notifications)
+              ? notificationData.notifications.slice(0, 6)
+              : []
           );
+        } else {
+          setNotifications([]);
         }
       } catch (notificationError) {
         console.error("Notifications loading error:", notificationError);
+        setNotifications([]);
       }
     } catch (err) {
       setError(
@@ -165,7 +224,13 @@ export default function AdminOverviewPage() {
   const formatDate = (date: string) => {
     if (!date) return "Unknown date";
 
-    return new Date(date).toLocaleString("en-US", {
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "Unknown date";
+    }
+
+    return parsedDate.toLocaleString("en-US", {
       dateStyle: "medium",
       timeStyle: "short",
     });
@@ -186,6 +251,21 @@ export default function AdminOverviewPage() {
     }
   };
 
+  const renderActivityIcon = (type: string) => {
+    switch (type) {
+      case "booking":
+        return <Clock size={18} />;
+      case "service":
+        return <Store size={18} />;
+      case "payment":
+        return <CreditCard size={18} />;
+      case "user":
+        return <UserRound size={18} />;
+      default:
+        return <Bell size={18} />;
+    }
+  };
+
   if (loading && !overview) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -201,7 +281,7 @@ export default function AdminOverviewPage() {
 
   if (error && !overview) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
         <div className="max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center">
           <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
 
@@ -213,7 +293,8 @@ export default function AdminOverviewPage() {
 
           <button
             onClick={fetchDashboard}
-            className="mt-5 rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#18382D]"
+            disabled={loading}
+            className="mt-5 rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:opacity-60"
           >
             Try Again
           </button>
@@ -254,7 +335,8 @@ export default function AdminOverviewPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+        <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+          <AlertCircle size={17} />
           {error}
         </div>
       )}
@@ -272,7 +354,6 @@ export default function AdminOverviewPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {statCards.map((card) => {
             const Icon = card.icon;
-
             const rawValue = overview?.[card.key] ?? 0;
 
             const value =
@@ -282,12 +363,12 @@ export default function AdminOverviewPage() {
 
             const content = (
               <div className="flex h-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-500">
                     {card.title}
                   </p>
 
-                  <h3 className="mt-2 text-2xl font-bold text-[#18382D] sm:text-3xl">
+                  <h3 className="mt-2 break-words text-2xl font-bold text-[#18382D] sm:text-3xl">
                     {value}
                   </h3>
 
@@ -304,12 +385,10 @@ export default function AdminOverviewPage() {
               </div>
             );
 
-            return card.link ? (
-              <Link href={card.link} key={card.key}>
+            return (
+              <Link href={card.link || "#"} key={card.key}>
                 {content}
               </Link>
-            ) : (
-              <div key={card.key}>{content}</div>
             );
           })}
         </div>
@@ -321,33 +400,8 @@ export default function AdminOverviewPage() {
           Quick Actions
         </h2>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              title: "Manage Users",
-              description: "View, search and manage platform users.",
-              href: "/admin/users",
-              icon: Users,
-            },
-            {
-              title: "Manage Services",
-              description: "Review and approve vendor services.",
-              href: "/admin/services",
-              icon: Store,
-            },
-            {
-              title: "Notifications",
-              description: "Check recent platform activities.",
-              href: "/admin/notifications",
-              icon: Bell,
-            },
-            {
-              title: "Transactions",
-              description: "Monitor subscription transactions.",
-              href: "/admin/transactions",
-              icon: CreditCard,
-            },
-          ].map((action) => {
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {quickActions.map((action) => {
             const Icon = action.icon;
 
             return (
@@ -395,7 +449,7 @@ export default function AdminOverviewPage() {
 
           <Link
             href="/admin/notifications"
-            className="flex items-center gap-1 text-sm font-semibold text-[#244A3B] hover:text-[#B68B62]"
+            className="flex items-center gap-1 text-sm font-semibold text-[#244A3B] transition hover:text-[#B68B62]"
           >
             View All <ArrowUpRight size={15} />
           </Link>
@@ -413,15 +467,7 @@ export default function AdminOverviewPage() {
                     notification.type
                   )}`}
                 >
-                  {notification.type === "booking" ? (
-                    <Clock size={18} />
-                  ) : notification.type === "service" ? (
-                    <Store size={18} />
-                  ) : notification.type === "payment" ? (
-                    <CreditCard size={18} />
-                  ) : (
-                    <UserRound size={18} />
-                  )}
+                  {renderActivityIcon(notification.type)}
                 </div>
 
                 <div className="min-w-0 flex-1">
