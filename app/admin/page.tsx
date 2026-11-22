@@ -384,7 +384,7 @@ export default function AdminOverviewPage() {
               </div>
             );
 
-            return card.link ? (
+            return "link" in card && card.link ?  (
               <Link href={card.link} key={card.key}>
                 {content}
               </Link>
