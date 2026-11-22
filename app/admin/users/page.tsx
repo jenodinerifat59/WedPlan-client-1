@@ -34,7 +34,7 @@ type UserItem = {
   businessName?: string;
 };
 
-type RoleFilter = "all" | "customer" | "vendor" | "admin" | "blocked";
+type RoleFilter = "all" | "customer" | "vendor" | "admin" | "blocked" | "active";
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserItem[]>([]);

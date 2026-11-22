@@ -16,6 +16,10 @@ import {
   ClipboardList,
   Save,
   CheckCircle2,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Filter,
 } from "lucide-react";
 import { getAuthToken } from "@/lib/get-token";
 
@@ -49,12 +53,12 @@ type Booking = {
 };
 
 const statusStyles: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700",
-  confirmed: "bg-blue-50 text-blue-700",
-  approved: "bg-blue-50 text-blue-700",
-  completed: "bg-emerald-50 text-emerald-700",
-  cancelled: "bg-red-50 text-red-700",
-  rejected: "bg-red-50 text-red-700",
+  pending: "bg-amber-50 text-amber-700 border-amber-100",
+  confirmed: "bg-blue-50 text-blue-700 border-blue-100",
+  approved: "bg-blue-50 text-blue-700 border-blue-100",
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-100",
+  cancelled: "bg-red-50 text-red-700 border-red-100",
+  rejected: "bg-red-50 text-red-700 border-red-100",
 };
 
 const availableStatuses = [
@@ -64,12 +68,25 @@ const availableStatuses = [
   "cancelled",
 ];
 
+const statusOptions = [
+  { label: "All Bookings", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Confirmed", value: "confirmed" },
+  { label: "Approved", value: "approved" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Rejected", value: "rejected" },
+];
+
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+
   const [selectedBooking, setSelectedBooking] =
     useState<Booking | null>(null);
 
@@ -77,15 +94,20 @@ export default function AdminBookingsPage() {
   const [updateStatus, setUpdateStatus] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const fetchBookings = useCallback(async () => {
+  const fetchBookings = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError("");
 
       const token = await getAuthToken();
 
       if (!token) {
-        throw new Error("Authentication token not found. Please login again.");
+        throw new Error("Please login again. Authentication token not found.");
       }
 
       const params = new URLSearchParams();
@@ -108,26 +130,39 @@ export default function AdminBookingsPage() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Failed to load bookings.");
-      }
-
       const data = await response.json();
 
-      setBookings(Array.isArray(data) ? data : []);
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to load bookings.");
+      }
+
+      const result = Array.isArray(data) ? data : [];
+
+      setBookings(result);
+
+      if (selectedBooking) {
+        const updated = result.find(
+          (item: Booking) => item._id === selectedBooking._id
+        );
+
+        if (updated) {
+          setSelectedBooking(updated);
+        }
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [status, search]);
+  }, [status, search, selectedBooking]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       fetchBookings();
-    }, 300);
+    }, 350);
 
     return () => clearTimeout(timeout);
   }, [fetchBookings]);
@@ -150,7 +185,7 @@ export default function AdminBookingsPage() {
 
     if (Number.isNaN(parsed.getTime())) return date;
 
-    return parsed.toLocaleDateString("en-US", {
+    return parsed.toLocaleDateString("en-BD", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -158,14 +193,45 @@ export default function AdminBookingsPage() {
   };
 
   const getStatusStyle = (value: string) => {
-    return statusStyles[value?.toLowerCase()] || "bg-gray-100 text-gray-600";
+    return (
+      statusStyles[value?.toLowerCase()] ||
+      "bg-gray-100 text-gray-600 border-gray-200"
+    );
+  };
+
+  const openDetails = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setUpdateStatus(booking.status);
+    setError("");
+    setSuccessMessage("");
+  };
+
+  const closeDetails = () => {
+    if (updating) return;
+
+    setSelectedBooking(null);
+    setSuccessMessage("");
+    setError("");
   };
 
   const handleStatusUpdate = async () => {
     if (!selectedBooking || !updateStatus) return;
 
+    if (!availableStatuses.includes(updateStatus)) {
+      setError("Please select a valid booking status.");
+      return;
+    }
+
     if (updateStatus === selectedBooking.status) {
       setError("Please select a different status.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Are you sure you want to change this booking to "${updateStatus}"?`
+      )
+    ) {
       return;
     }
 
@@ -197,7 +263,9 @@ export default function AdminBookingsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to update booking status.");
+        throw new Error(
+          data.message || "Failed to update booking status."
+        );
       }
 
       const updatedBooking = {
@@ -214,9 +282,9 @@ export default function AdminBookingsPage() {
       );
 
       setSelectedBooking(updatedBooking);
-      setSuccessMessage("Booking status updated successfully.");
-
-      await fetchBookings();
+      setSuccessMessage(
+        data.message || "Booking status updated successfully."
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong."
@@ -226,23 +294,18 @@ export default function AdminBookingsPage() {
     }
   };
 
-  const openDetails = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setUpdateStatus(booking.status);
-    setError("");
-    setSuccessMessage("");
-  };
-
   return (
     <div className="min-h-screen space-y-7 bg-[#FAF9F6] p-4 sm:p-6 lg:p-8">
+
       {/* Header */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="flex animate-[fadeUp_.5s_ease_both] flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <p className="text-sm font-semibold tracking-wide text-[#B68B62]">
+          <p className="flex items-center gap-2 text-sm font-semibold tracking-wide text-[#B68B62]">
+            <ClipboardList size={17} />
             WEDPLAN ADMINISTRATION
           </p>
 
-          <h1 className="mt-1 text-2xl font-bold text-[#18382D] sm:text-3xl">
+          <h1 className="mt-2 text-2xl font-bold text-[#18382D] sm:text-3xl">
             Manage Bookings
           </h1>
 
@@ -252,14 +315,28 @@ export default function AdminBookingsPage() {
         </div>
 
         <button
-          onClick={fetchBookings}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-[#244A3B] shadow-sm hover:bg-gray-50 disabled:opacity-60"
+          onClick={() => fetchBookings(true)}
+          disabled={loading || refreshing}
+          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-[#244A3B] shadow-sm transition duration-300 hover:-translate-y-0.5 hover:bg-[#244A3B] hover:text-white disabled:opacity-50"
         >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          Refresh
+          <RefreshCw
+            size={16}
+            className={refreshing ? "animate-spin" : ""}
+          />
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex animate-[fadeUp_.3s_ease_both] items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+          <AlertCircle size={19} />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError("")}>
+            <X size={17} />
+          </button>
+        </div>
+      )}
 
       {/* Statistics */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -268,42 +345,50 @@ export default function AdminBookingsPage() {
             title: "Total Bookings",
             value: stats.total,
             color: "text-[#244A3B]",
+            bg: "bg-[#244A3B]/10",
             icon: ClipboardList,
           },
           {
             title: "Pending",
             value: stats.pending,
             color: "text-amber-600",
-            icon: CalendarDays,
+            bg: "bg-amber-50",
+            icon: Clock,
           },
           {
             title: "Confirmed",
             value: stats.confirmed,
             color: "text-blue-600",
-            icon: UserRound,
+            bg: "bg-blue-50",
+            icon: CheckCircle,
           },
           {
             title: "Completed",
             value: stats.completed,
             color: "text-emerald-600",
-            icon: Store,
+            bg: "bg-emerald-50",
+            icon: CheckCircle2,
           },
-        ].map((item) => {
+        ].map((item, index) => {
           const Icon = item.icon;
 
           return (
             <div
               key={item.title}
-              className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+              style={{ animationDelay: `${index * 100}ms` }}
+              className="group animate-[fadeUp_.5s_ease_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-500">
                   {item.title}
                 </p>
-                <Icon size={20} className={item.color} />
+
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${item.bg} transition duration-300 group-hover:scale-110`}>
+                  <Icon size={21} className={item.color} />
+                </div>
               </div>
 
-              <h2 className={`mt-3 text-3xl font-bold ${item.color}`}>
+              <h2 className={`mt-4 text-3xl font-bold ${item.color}`}>
                 {item.value}
               </h2>
             </div>
@@ -312,7 +397,7 @@ export default function AdminBookingsPage() {
       </div>
 
       {/* Search and Filter */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+      <div className="animate-[fadeUp_.6s_ease_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="relative flex-1">
             <Search
@@ -325,46 +410,49 @@ export default function AdminBookingsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search customer, vendor, service or booking ID..."
-              className="w-full rounded-xl border border-gray-200 py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
+              className="w-full rounded-xl border border-gray-200 bg-[#FAF9F6] py-3 pl-11 pr-4 text-sm text-gray-700 outline-none transition duration-300 focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
             />
           </div>
 
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#244A3B]"
-          >
-            <option value="all">All Bookings</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="approved">Approved</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <Filter size={17} className="shrink-0 text-gray-400" />
+
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#244A3B] sm:w-52"
+            >
+              {statusOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
-          <AlertCircle size={19} />
-          {error}
-        </div>
-      )}
-
       {/* Booking List */}
-      <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <div className="border-b border-gray-100 p-5">
-          <h2 className="font-bold text-[#18382D]">All Booking Requests</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            {bookings.length} booking(s) found
-          </p>
+      <section className="animate-[fadeUp_.7s_ease_both] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-2 border-b border-gray-100 p-5 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="font-bold text-[#18382D]">
+              All Booking Requests
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {bookings.length} booking(s) found
+            </p>
+          </div>
+
+          <span className="rounded-full bg-[#244A3B]/10 px-3 py-1.5 text-xs font-semibold text-[#244A3B]">
+            {status === "all" ? "All Statuses" : status}
+          </span>
         </div>
 
         {loading ? (
-          <div className="flex min-h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#244A3B]" />
+          <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-gray-500">
+            <Loader2 className="h-7 w-7 animate-spin text-[#244A3B]" />
+            Loading bookings...
           </div>
         ) : bookings.length > 0 ? (
           <div className="overflow-x-auto">
@@ -381,8 +469,12 @@ export default function AdminBookingsPage() {
               </thead>
 
               <tbody className="divide-y divide-gray-100">
-                {bookings.map((booking) => (
-                  <tr key={booking._id} className="transition hover:bg-gray-50">
+                {bookings.map((booking, index) => (
+                  <tr
+                    key={booking._id}
+                    style={{ animationDelay: `${index * 40}ms` }}
+                    className="animate-[fadeUp_.4s_ease_both] transition duration-200 hover:bg-[#FAF9F6]"
+                  >
                     <td className="px-5 py-4">
                       <p className="font-semibold text-[#18382D]">
                         {booking.service?.serviceName || "Unknown Service"}
@@ -418,7 +510,7 @@ export default function AdminBookingsPage() {
 
                     <td className="px-5 py-4">
                       <span
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
+                        className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
                           booking.status
                         )}`}
                       >
@@ -429,7 +521,7 @@ export default function AdminBookingsPage() {
                     <td className="px-5 py-4 text-right">
                       <button
                         onClick={() => openDetails(booking)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[#244A3B]/10 px-3 py-2 text-xs font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#244A3B]/10 px-3 py-2 text-xs font-semibold text-[#244A3B] transition duration-300 hover:-translate-y-0.5 hover:bg-[#244A3B] hover:text-white"
                       >
                         <Eye size={15} />
                         Details
@@ -441,8 +533,8 @@ export default function AdminBookingsPage() {
             </table>
           </div>
         ) : (
-          <div className="px-5 py-16 text-center">
-            <ClipboardList className="mx-auto h-10 w-10 text-gray-300" />
+          <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center">
+            <ClipboardList className="h-11 w-11 text-gray-300" />
             <h3 className="mt-3 font-semibold text-gray-600">
               No bookings found
             </h3>
@@ -456,14 +548,15 @@ export default function AdminBookingsPage() {
       {/* Booking Details Modal */}
       {selectedBooking && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedBooking(null)}
+          className="fixed inset-0 z-50 flex animate-[fadeIn_.2s_ease_both] items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={closeDetails}
         >
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            className="max-h-[90vh] w-full max-w-2xl animate-[modalIn_.3s_ease_both] overflow-y-auto rounded-2xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-gray-100 p-5">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white p-5">
               <div>
                 <p className="text-xs font-semibold text-[#B68B62]">
                   BOOKING DETAILS
@@ -474,22 +567,26 @@ export default function AdminBookingsPage() {
               </div>
 
               <button
-                onClick={() => setSelectedBooking(null)}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                onClick={closeDetails}
+                disabled={updating}
+                className="rounded-lg p-2 text-gray-500 transition hover:rotate-90 hover:bg-gray-100 disabled:opacity-50"
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="space-y-5 p-5">
-              <div className="rounded-xl bg-[#FAF9F6] p-4">
+
+              {/* Booking ID */}
+              <div className="rounded-xl border border-gray-100 bg-[#FAF9F6] p-4">
                 <p className="text-xs text-gray-500">Booking ID</p>
                 <p className="mt-1 break-all text-sm font-semibold text-[#18382D]">
                   {selectedBooking._id}
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Booking Information */}
+              <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-gray-400">Service</p>
                   <p className="mt-1 font-semibold text-[#18382D]">
@@ -545,7 +642,7 @@ export default function AdminBookingsPage() {
                 <div>
                   <p className="text-xs text-gray-400">Current Status</p>
                   <span
-                    className={`mt-2 inline-block rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
+                    className={`mt-2 inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold capitalize ${getStatusStyle(
                       selectedBooking.status
                     )}`}
                   >
@@ -561,14 +658,15 @@ export default function AdminBookingsPage() {
                 </div>
               </div>
 
+              {/* Customer Message */}
               <div>
                 <p className="text-xs text-gray-400">Customer Message</p>
-                <p className="mt-2 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-600">
+                <p className="mt-2 whitespace-pre-wrap rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-600">
                   {selectedBooking.message || "No message provided."}
                 </p>
               </div>
 
-              {/* Update Booking Status */}
+              {/* Status Update */}
               <div className="rounded-xl border border-gray-100 bg-[#FAF9F6] p-4">
                 <h3 className="font-bold text-[#18382D]">
                   Update Booking Status
@@ -583,8 +681,14 @@ export default function AdminBookingsPage() {
                     value={updateStatus}
                     onChange={(e) => setUpdateStatus(e.target.value)}
                     disabled={updating}
-                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none focus:border-[#244A3B] disabled:opacity-60"
+                    className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#244A3B] disabled:opacity-60"
                   >
+                    {!availableStatuses.includes(selectedBooking.status) && (
+                      <option value={selectedBooking.status} disabled>
+                        {selectedBooking.status} (Legacy status)
+                      </option>
+                    )}
+
                     {availableStatuses.map((item) => (
                       <option key={item} value={item}>
                         {item.charAt(0).toUpperCase() + item.slice(1)}
@@ -596,9 +700,10 @@ export default function AdminBookingsPage() {
                     onClick={handleStatusUpdate}
                     disabled={
                       updating ||
-                      updateStatus === selectedBooking.status
+                      updateStatus === selectedBooking.status ||
+                      !availableStatuses.includes(updateStatus)
                     }
-                    className="flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition duration-300 hover:-translate-y-0.5 hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {updating ? (
                       <Loader2 size={17} className="animate-spin" />
@@ -610,7 +715,7 @@ export default function AdminBookingsPage() {
                 </div>
 
                 {successMessage && (
-                  <p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald-600">
+                  <p className="mt-3 flex animate-[fadeUp_.3s_ease_both] items-center gap-2 text-sm font-medium text-emerald-600">
                     <CheckCircle2 size={16} />
                     {successMessage}
                   </p>
@@ -618,14 +723,12 @@ export default function AdminBookingsPage() {
               </div>
             </div>
 
+            {/* Modal Footer */}
             <div className="flex justify-end border-t border-gray-100 p-5">
               <button
-                onClick={() => {
-                  setSelectedBooking(null);
-                  setSuccessMessage("");
-                  setError("");
-                }}
-                className="rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#18382D]"
+                onClick={closeDetails}
+                disabled={updating}
+                className="rounded-xl bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white transition duration-300 hover:bg-[#18382D] disabled:opacity-50"
               >
                 Close
               </button>
@@ -633,6 +736,40 @@ export default function AdminBookingsPage() {
           </div>
         </div>
       )}
+
+      {/* Animation Keyframes */}
+      <style jsx global>{`
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes modalIn {
+          from {
+            opacity: 0;
+            transform: translateY(18px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }
