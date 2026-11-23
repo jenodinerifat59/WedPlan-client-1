@@ -29,8 +29,12 @@ export default function Navbar() {
   const router = useRouter();
 
   const userRole = (
-    session?.user as typeof session.user & { role?: string }
+    session?.user as
+      | (NonNullable<typeof session>["user"] & { role?: string })
+      | undefined
   )?.role;
+
+  const userName = session?.user?.name || "User";
 
   const dashboardHref =
     userRole === "admin"
@@ -67,7 +71,6 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-[#203C32]/10 bg-[#FAF9F6]/95 backdrop-blur-xl">
       <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 md:px-10">
-
         {/* Logo */}
         <Link
           href="/"
@@ -110,7 +113,7 @@ export default function Navbar() {
                 </Link>
 
                 <span className="max-w-[130px] truncate text-sm font-medium text-[#244A3B]">
-                  Hi, {session.user.name}
+                  Hi, {userName}
                 </span>
 
                 <button
@@ -162,7 +165,6 @@ export default function Navbar() {
         }`}
       >
         <div className="space-y-5 px-6 py-6">
-
           <div className="flex flex-col gap-5 text-sm font-medium">
             {navLinks.map((link) => (
               <Link
@@ -181,7 +183,7 @@ export default function Navbar() {
               {session ? (
                 <div className="space-y-4">
                   <p className="text-sm font-medium text-[#244A3B]">
-                    Hi, {session.user.name}
+                    Hi, {userName}
                   </p>
 
                   <Link
