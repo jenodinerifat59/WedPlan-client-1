@@ -261,12 +261,15 @@ export default function AdminSettingsPage() {
   const labelClass =
     "mb-2 block text-sm font-semibold text-gray-700";
 
+  const buttonClass =
+    "inline-flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:bg-[#18382D] hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:scale-100";
+
   return (
     <div className="min-h-screen bg-[#F8F6F0] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 animate-[fadeIn_0.5s_ease-out_both]">
           <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#B68B62]">
             <Settings size={16} />
             Admin Panel
@@ -281,16 +284,17 @@ export default function AdminSettingsPage() {
           </p>
         </div>
 
-        {/* Success / Error Message */}
+        {/* Success Message */}
         {message && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 animate-[fadeIn_0.3s_ease-out_both]">
             <CheckCircle2 size={19} />
             {message}
           </div>
         )}
 
+        {/* Error Message */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 animate-[fadeIn_0.3s_ease-out_both]">
             <AlertCircle size={19} />
             {error}
           </div>
@@ -299,10 +303,10 @@ export default function AdminSettingsPage() {
         <div className="space-y-7">
 
           {/* Admin Profile */}
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <section className="animate-[fadeIn_0.5s_ease-out_both] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-xl">
             <div className="border-b border-gray-100 px-5 py-5 sm:px-7">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#244A3B]/10 text-[#244A3B]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#244A3B]/10 text-[#244A3B] transition-transform duration-300 hover:rotate-6 hover:scale-110">
                   <UserRound size={22} />
                 </div>
 
@@ -321,12 +325,12 @@ export default function AdminSettingsPage() {
 
               {/* Profile Preview */}
               <div className="mb-7 flex items-center gap-4">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-[#F8F6F0] bg-[#244A3B]/10">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-[#F8F6F0] bg-[#244A3B]/10 transition-transform duration-500 hover:scale-105">
                   {profile.image ? (
                     <img
                       src={profile.image}
                       alt="Admin profile"
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                       }}
@@ -405,7 +409,7 @@ export default function AdminSettingsPage() {
                 <button
                   type="submit"
                   disabled={profileSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-60"
+                  className={buttonClass}
                 >
                   {profileSaving ? (
                     <Loader2 size={17} className="animate-spin" />
@@ -419,10 +423,10 @@ export default function AdminSettingsPage() {
           </section>
 
           {/* Platform Settings */}
-          <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <section className="animate-[fadeIn_0.6s_ease-out_both] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-xl">
             <div className="border-b border-gray-100 px-5 py-5 sm:px-7">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#B68B62]/10 text-[#B68B62]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#B68B62]/10 text-[#B68B62] transition-transform duration-300 hover:rotate-6 hover:scale-110">
                   <Building2 size={22} />
                 </div>
 
@@ -516,7 +520,7 @@ export default function AdminSettingsPage() {
                 <button
                   type="submit"
                   disabled={platformSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-60"
+                  className={buttonClass}
                 >
                   {platformSaving ? (
                     <Loader2 size={17} className="animate-spin" />
@@ -530,7 +534,7 @@ export default function AdminSettingsPage() {
           </section>
 
           {/* Security Note */}
-          <div className="flex items-start gap-3 rounded-xl border border-[#E8DDCE] bg-[#F4EFE6] p-4">
+          <div className="animate-[fadeIn_0.7s_ease-out_both] flex items-start gap-3 rounded-xl border border-[#E8DDCE] bg-[#F4EFE6] p-4 transition-all duration-300 hover:shadow-md">
             <ShieldCheck className="mt-0.5 shrink-0 text-[#8B6949]" size={20} />
             <div>
               <h3 className="text-sm font-semibold text-[#18382D]">

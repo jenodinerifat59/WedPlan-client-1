@@ -376,7 +376,7 @@ export default function AdminBookingsPage() {
             <div
               key={item.title}
               style={{ animationDelay: `${index * 100}ms` }}
-              className="group animate-[fadeUp_.5s_ease_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
+             className="group animate-[fadeUp_.5s_ease_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition duration-500 hover:-translate-y-3 hover:scale-[1.02] hover:shadow-xl [animation:fadeUp_.5s_ease_both,floatCard_5s_ease-in-out_1s_infinite]"
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-500">
@@ -399,7 +399,7 @@ export default function AdminBookingsPage() {
       {/* Search and Filter */}
       <div className="animate-[fadeUp_.6s_ease_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row">
-          <div className="relative flex-1">
+          <div className="relative flex-1 transition-all duration-500 hover:shadow-lg">
             <Search
               size={18}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"

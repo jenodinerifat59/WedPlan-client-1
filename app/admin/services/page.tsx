@@ -496,7 +496,7 @@ export default function AdminServicesPage() {
         </div>
 
         {/* Search and Filters */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow duration-300 hover:shadow-md sm:p-6">
+        <div className="animate-[fadeIn_0.5s_ease-out_both] rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-lg sm:p-6">
           <div className="mb-5 flex items-center gap-2">
             <Filter size={18} className="text-[#B68B62]" />
             <h2 className="font-bold text-[#18382D]">

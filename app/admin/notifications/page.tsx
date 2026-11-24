@@ -425,7 +425,7 @@ export default function AdminNotificationsPage() {
         <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
 
           {/* Search and Filters */}
-          <div className="border-b border-gray-100 p-5 sm:p-6">
+         <div className="border-b border-gray-100 p-5 sm:p-6 transition-all duration-500 hover:shadow-lg">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
                 <h2 className="font-bold text-[#18382D]">
