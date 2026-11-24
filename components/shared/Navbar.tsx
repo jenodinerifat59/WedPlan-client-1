@@ -21,43 +21,43 @@ const navLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
+type UserRole = "admin" | "vendor" | "customer";
+
 export default function Navbar() {
   const { data: session, isPending } = useSession();
+
   const [isOpen, setIsOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const pathname = usePathname();
   const router = useRouter();
 
-  const userRole = (
-    session?.user as
-      | (NonNullable<typeof session>["user"] & { role?: string })
-      | undefined
-  )?.role;
+  const user = session?.user as
+    | (NonNullable<typeof session>["user"] & {
+        role?: string;
+        isBlocked?: boolean;
+      })
+    | undefined;
 
-  const userName = session?.user?.name || "User";
+  const userName = user?.name || "User";
 
-  const dashboardHref =
-    userRole === "admin"
-      ? "/admin"
-      : userRole === "vendor"
-        ? "/vendor"
-        : userRole === "customer"
-          ? "/customer"
-          : "/";
+  const userRole = user?.role?.toLowerCase() as
+    | UserRole
+    | undefined;
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      setIsOpen(false);
-      router.push("/");
-      router.refresh();
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+  const dashboardRoutes: Record<UserRole, string> = {
+    admin: "/admin",
+    vendor: "/vendor",
+    customer: "/customer",
   };
+
+  const dashboardHref = userRole
+    ? dashboardRoutes[userRole]
+    : null;
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
+
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
@@ -68,13 +68,36 @@ export default function Navbar() {
         : "text-[#52675E] hover:text-[#B68B62]"
     }`;
 
+  const closeMobileMenu = () => {
+    setIsOpen(false);
+  };
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+
+    try {
+      setLoggingOut(true);
+
+      await signOut();
+
+      setIsOpen(false);
+      router.replace("/");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-[#203C32]/10 bg-[#FAF9F6]/95 backdrop-blur-xl">
       <nav className="mx-auto flex h-[76px] max-w-7xl items-center justify-between px-5 md:px-10">
+
         {/* Logo */}
         <Link
           href="/"
-          onClick={() => setIsOpen(false)}
+          onClick={closeMobileMenu}
           className="flex items-center gap-2"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#244A3B] text-white">
@@ -104,24 +127,28 @@ export default function Navbar() {
           {!isPending &&
             (session ? (
               <>
-                <Link
-                  href={dashboardHref}
-                  className="flex items-center gap-2 rounded-full bg-[#244A3B]/10 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
-                >
-                  <LayoutDashboard size={16} />
-                  Dashboard
-                </Link>
+                {dashboardHref && (
+                  <Link
+                    href={dashboardHref}
+                    className="flex items-center gap-2 rounded-full bg-[#244A3B]/10 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
+                  >
+                    <LayoutDashboard size={16} />
+                    Dashboard
+                  </Link>
+                )}
 
                 <span className="max-w-[130px] truncate text-sm font-medium text-[#244A3B]">
                   Hi, {userName}
                 </span>
 
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 rounded-full border border-[#244A3B]/20 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
+                  disabled={loggingOut}
+                  className="flex items-center gap-2 rounded-full border border-[#244A3B]/20 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white disabled:opacity-60"
                 >
                   <LogOut size={16} />
-                  Log Out
+                  {loggingOut ? "Logging out..." : "Log Out"}
                 </button>
               </>
             ) : (
@@ -165,12 +192,14 @@ export default function Navbar() {
         }`}
       >
         <div className="space-y-5 px-6 py-6">
+
+          {/* Mobile Links */}
           <div className="flex flex-col gap-5 text-sm font-medium">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                onClick={() => setIsOpen(false)}
+                onClick={closeMobileMenu}
                 className={linkClass(link.href)}
               >
                 {link.name}
@@ -178,6 +207,7 @@ export default function Navbar() {
             ))}
           </div>
 
+          {/* Mobile Authentication */}
           {!isPending && (
             <div className="border-t border-[#203C32]/10 pt-5">
               {session ? (
@@ -186,28 +216,32 @@ export default function Navbar() {
                     Hi, {userName}
                   </p>
 
-                  <Link
-                    href={dashboardHref}
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center justify-center gap-2 rounded-full bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#18382C]"
-                  >
-                    <LayoutDashboard size={16} />
-                    Dashboard
-                  </Link>
+                  {dashboardHref && (
+                    <Link
+                      href={dashboardHref}
+                      onClick={closeMobileMenu}
+                      className="flex items-center justify-center gap-2 rounded-full bg-[#244A3B] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#18382C]"
+                    >
+                      <LayoutDashboard size={16} />
+                      Dashboard
+                    </Link>
+                  )}
 
                   <button
+                    type="button"
                     onClick={handleLogout}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border border-[#244A3B]/20 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white"
+                    disabled={loggingOut}
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-[#244A3B]/20 px-5 py-3 text-sm font-semibold text-[#244A3B] transition hover:bg-[#244A3B] hover:text-white disabled:opacity-60"
                   >
                     <LogOut size={16} />
-                    Log Out
+                    {loggingOut ? "Logging out..." : "Log Out"}
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-4">
                   <Link
                     href="/login"
-                    onClick={() => setIsOpen(false)}
+                    onClick={closeMobileMenu}
                     className="flex-1 rounded-full border border-[#244A3B]/20 py-3 text-center text-sm font-semibold text-[#244A3B]"
                   >
                     Log In
@@ -215,7 +249,7 @@ export default function Navbar() {
 
                   <Link
                     href="/register"
-                    onClick={() => setIsOpen(false)}
+                    onClick={closeMobileMenu}
                     className="flex-1 rounded-full bg-[#244A3B] py-3 text-center text-sm font-semibold text-white"
                   >
                     Get Started
