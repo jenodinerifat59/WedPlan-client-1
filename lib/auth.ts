@@ -8,8 +8,7 @@ import { MongoClient } from "mongodb";
 const mongoClient = new MongoClient(process.env.MONGODB_URI!);
 const db = mongoClient.db(process.env.DB_NAME || "wedplan");
 
-const baseURL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
-
+const baseURL = process.env.NEXT_PUBLIC_BETTER_AUTH_URL || "http://localhost:3000";
 export const auth = betterAuth({
   appName: "WedPlan",
   baseURL,
@@ -20,8 +19,11 @@ export const auth = betterAuth({
     usePlural: true,
   }),
 
-  trustedOrigins: [baseURL, "http://localhost:3000"],
-
+trustedOrigins: [
+  baseURL,
+  "http://localhost:3000",
+  "https://wed-plan-client-1.vercel.app",
+],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 6,
