@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAuthToken } from "@/lib/get-token";
@@ -10,6 +10,9 @@ import {
   Save,
   Loader2,
   Image as ImageIcon,
+  Upload,
+  X,
+  ImagePlus,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -32,6 +35,7 @@ interface Service {
 
 function EditServiceForm({ id }: { id: string }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<Service>({
     serviceName: "",
@@ -44,9 +48,11 @@ function EditServiceForm({ id }: { id: string }) {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Fetch existing service
   useEffect(() => {
     let cancelled = false;
 
@@ -81,7 +87,7 @@ function EditServiceForm({ id }: { id: string }) {
             description: data.description || "",
             price: data.price || 0,
             location: data.location || "",
-            images: data.images || [],
+            images: Array.isArray(data.images) ? data.images : [],
           });
         }
       } catch (err) {
@@ -104,6 +110,7 @@ function EditServiceForm({ id }: { id: string }) {
     };
   }, [id]);
 
+  // Handle normal form fields
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -117,6 +124,103 @@ function EditServiceForm({ id }: { id: string }) {
     }));
   };
 
+  // Upload selected images directly to ImageBB
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = Array.from(event.target.files || []);
+
+    if (!files.length) return;
+
+    setError("");
+    setSuccess("");
+
+    const invalidFile = files.find(
+      (file) => !file.type.startsWith("image/")
+    );
+
+    if (invalidFile) {
+      setError("Please select valid image files only.");
+      event.target.value = "";
+      return;
+    }
+
+    const oversizedFile = files.find(
+      (file) => file.size > 5 * 1024 * 1024
+    );
+
+    if (oversizedFile) {
+      setError("Each image must be less than 5MB.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+
+      if (!apiKey) {
+        throw new Error(
+          "ImageBB API key is missing. Check your .env.local file."
+        );
+      }
+
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const response = await fetch(
+          `https://api.imgbb.com/1/upload?key=${apiKey}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success || !data.data?.url) {
+          throw new Error(
+            data.error?.message || `Failed to upload ${file.name}`
+          );
+        }
+
+        uploadedUrls.push(data.data.url);
+      }
+
+      // Add uploaded URLs to existing images
+      setFormData((prev) => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls],
+      }));
+
+      setSuccess(
+        `${uploadedUrls.length} image(s) uploaded successfully!`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Image upload failed."
+      );
+    } finally {
+      setUploading(false);
+
+      // Allow selecting the same file again
+      event.target.value = "";
+    }
+  };
+
+  // Remove an image from preview and form data
+  const removeImage = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, imageIndex) => imageIndex !== index),
+    }));
+  };
+
+  // Update service
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -131,11 +235,13 @@ function EditServiceForm({ id }: { id: string }) {
         throw new Error("Please login first.");
       }
 
+      if (formData.images.length === 0) {
+        throw new Error("Please upload at least one service image.");
+      }
+
       const payload = {
         ...formData,
-        images: formData.images
-          .map((image) => image.trim())
-          .filter(Boolean),
+        images: formData.images.filter(Boolean),
       };
 
       const response = await fetch(
@@ -219,6 +325,7 @@ function EditServiceForm({ id }: { id: string }) {
         onSubmit={handleSubmit}
         className="space-y-6 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm md:p-8"
       >
+        {/* Service Name */}
         <div>
           <label className="mb-2 block text-sm font-semibold text-[#18382D]">
             Service Name
@@ -234,6 +341,7 @@ function EditServiceForm({ id }: { id: string }) {
           />
         </div>
 
+        {/* Category */}
         <div>
           <label className="mb-2 block text-sm font-semibold text-[#18382D]">
             Category
@@ -256,6 +364,7 @@ function EditServiceForm({ id }: { id: string }) {
           </select>
         </div>
 
+        {/* Description */}
         <div>
           <label className="mb-2 block text-sm font-semibold text-[#18382D]">
             Description
@@ -272,6 +381,7 @@ function EditServiceForm({ id }: { id: string }) {
           />
         </div>
 
+        {/* Price and Location */}
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-semibold text-[#18382D]">
@@ -304,31 +414,96 @@ function EditServiceForm({ id }: { id: string }) {
           </div>
         </div>
 
+        {/* Image Upload and Preview */}
         <div>
-          <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#18382D]">
+          <label className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#18382D]">
             <ImageIcon size={17} />
-            Image URLs
+            Service Images
           </label>
 
-          <textarea
-            value={formData.images.join("\n")}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                images: e.target.value.split("\n"),
-              }))
-            }
-            rows={4}
-            placeholder="Enter one image URL per line"
-            required
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-[#244A3B]"
-          />
+          {/* Image Preview */}
+          {formData.images.length > 0 && (
+            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+              {formData.images.map((image, index) => (
+                <div
+                  key={`${image}-${index}`}
+                  className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+                >
+                  <img
+                    src={image}
+                    alt={`Service image ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
 
-          <p className="mt-2 text-xs text-gray-400">
-            Enter one image URL per line.
-          </p>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white opacity-100 shadow transition hover:bg-red-700 sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Remove image"
+                  >
+                    <X size={16} />
+                  </button>
+
+                  {index === 0 && (
+                    <span className="absolute bottom-2 left-2 rounded-md bg-[#18382D]/90 px-2 py-1 text-xs font-medium text-white">
+                      Main Image
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upload Box */}
+          <div className="rounded-2xl border-2 border-dashed border-[#244A3B]/30 bg-[#F8F6F0] p-6 text-center transition hover:border-[#244A3B]">
+            <ImagePlus
+              size={35}
+              className="mx-auto text-[#244A3B]"
+            />
+
+            <p className="mt-3 text-sm font-semibold text-[#18382D]">
+              Upload service images
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Select images directly from your computer
+            </p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-[#244A3B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 size={17} className="animate-spin" />
+                  Uploading Images...
+                </>
+              ) : (
+                <>
+                  <Upload size={17} />
+                  Choose Images
+                </>
+              )}
+            </button>
+
+            <p className="mt-3 text-xs text-gray-400">
+              Maximum 5MB per image. Supported image formats only.
+            </p>
+          </div>
         </div>
 
+        {/* Form Actions */}
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:justify-end">
           <Link
             href="/vendor/services"
@@ -339,7 +514,7 @@ function EditServiceForm({ id }: { id: string }) {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="flex items-center justify-center gap-2 rounded-full bg-[#244A3B] px-8 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:opacity-50"
           >
             {saving ? (

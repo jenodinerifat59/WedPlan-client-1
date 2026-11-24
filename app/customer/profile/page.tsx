@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   UserRound,
   Mail,
@@ -11,6 +11,7 @@ import {
   X,
   Camera,
   Loader2,
+  Upload,
 } from "lucide-react";
 
 import { authClient, useSession } from "@/lib/auth-client";
@@ -19,11 +20,13 @@ export default function CustomerProfilePage() {
   const { data: session, isPending } = useSession();
 
   const user = session?.user;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
   const [image, setImage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -42,11 +45,83 @@ export default function CustomerProfilePage() {
     setIsEditing(true);
   };
 
+  // Upload profile image directly to ImageBB
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setError("");
+    setSuccess("");
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size must be less than 5MB.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+
+      if (!apiKey) {
+        throw new Error(
+          "ImageBB API key is missing. Check your .env.local file."
+        );
+      }
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await fetch(
+        `https://api.imgbb.com/1/upload?key=${apiKey}`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success || !data.data?.url) {
+        throw new Error(
+          data.error?.message || "Image upload failed."
+        );
+      }
+
+      setImage(data.data.url);
+      setSuccess("Profile image uploaded successfully!");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to upload profile image."
+      );
+    } finally {
+      setIsUploading(false);
+      event.target.value = "";
+    }
+  };
+
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!name.trim()) {
       setError("Name is required.");
+      return;
+    }
+
+    if (isUploading) {
+      setError("Please wait until image upload is complete.");
       return;
     }
 
@@ -114,7 +189,7 @@ export default function CustomerProfilePage() {
         </button>
       </div>
 
-      {success && (
+      {success && !isEditing && (
         <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
           {success}
         </div>
@@ -199,7 +274,7 @@ export default function CustomerProfilePage() {
       {/* Edit Profile Modal */}
       {isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-[#18382D]">
@@ -212,7 +287,7 @@ export default function CustomerProfilePage() {
 
               <button
                 onClick={() => setIsEditing(false)}
-                disabled={isSaving}
+                disabled={isSaving || isUploading}
                 className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100"
               >
                 <X size={20} />
@@ -220,27 +295,58 @@ export default function CustomerProfilePage() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-5">
-              {/* Image Preview */}
+              {/* Profile Image Preview */}
               <div className="flex flex-col items-center">
-                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-[#F8F6F0]">
-                  {image.trim() ? (
+                <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-gray-200 bg-[#F8F6F0]">
+                  {image ? (
                     <img
                       src={image}
                       alt="Profile preview"
                       className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
                     />
                   ) : (
-                    <Camera size={32} className="text-[#244A3B]" />
+                    <Camera size={35} className="text-[#244A3B]" />
                   )}
                 </div>
+
                 <p className="mt-2 text-xs text-gray-500">
                   Profile Image Preview
                 </p>
+
+                {/* Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || isSaving}
+                  className="mt-4 flex items-center gap-2 rounded-lg bg-[#244A3B] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Choose Profile Image
+                    </>
+                  )}
+                </button>
+
+                <p className="mt-2 text-xs text-gray-400">
+                  Maximum image size: 5MB
+                </p>
               </div>
 
+              {/* Full Name */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
                   Full Name
@@ -255,19 +361,6 @@ export default function CustomerProfilePage() {
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Profile Image URL
-                </label>
-                <input
-                  type="url"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-[#244A3B] focus:ring-2 focus:ring-[#244A3B]/10"
-                />
-              </div>
-
               {error && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
                   {error}
@@ -278,7 +371,7 @@ export default function CustomerProfilePage() {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  disabled={isSaving}
+                  disabled={isSaving || isUploading}
                   className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
@@ -286,7 +379,7 @@ export default function CustomerProfilePage() {
 
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || isUploading}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#244A3B] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#18382D] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSaving ? (
