@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAuthToken } from "@/lib/get-token";
 import {
@@ -30,10 +30,8 @@ interface Service {
   images: string[];
 }
 
-export default function EditServicePage() {
-  const params = useParams();
+function EditServiceForm({ id }: { id: string }) {
   const router = useRouter();
-  const id = params.id as string;
 
   const [formData, setFormData] = useState<Service>({
     serviceName: "",
@@ -50,6 +48,8 @@ export default function EditServicePage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchService = async () => {
       try {
         const token = await getAuthToken();
@@ -74,24 +74,34 @@ export default function EditServicePage() {
           throw new Error(data.message || "Failed to load service");
         }
 
-        setFormData({
-          serviceName: data.serviceName || "",
-          category: data.category || "",
-          description: data.description || "",
-          price: data.price || 0,
-          location: data.location || "",
-          images: data.images || [],
-        });
+        if (!cancelled) {
+          setFormData({
+            serviceName: data.serviceName || "",
+            category: data.category || "",
+            description: data.description || "",
+            price: data.price || 0,
+            location: data.location || "",
+            images: data.images || [],
+          });
+        }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Something went wrong"
-        );
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Something went wrong"
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     if (id) fetchService();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const handleChange = (
@@ -116,6 +126,10 @@ export default function EditServicePage() {
       setSuccess("");
 
       const token = await getAuthToken();
+
+      if (!token) {
+        throw new Error("Please login first.");
+      }
 
       const payload = {
         ...formData,
@@ -167,7 +181,6 @@ export default function EditServicePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-7">
-
       <div>
         <Link
           href="/vendor/services"
@@ -349,4 +362,26 @@ export default function EditServicePage() {
       </p>
     </div>
   );
+}
+
+export default function EditServicePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const [id, setId] = useState("");
+
+  useEffect(() => {
+    params.then((value) => setId(value.id));
+  }, [params]);
+
+  if (!id) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#244A3B]" />
+      </div>
+    );
+  }
+
+  return <EditServiceForm id={id} />;
 }
