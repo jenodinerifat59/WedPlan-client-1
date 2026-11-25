@@ -3,12 +3,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,8 +15,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Get callback URL without useSearchParams()
   const getRedirectUrl = () => {
-    const callbackUrl = searchParams.get("callbackUrl");
+    const params = new URLSearchParams(window.location.search);
+    const callbackUrl = params.get("callbackUrl");
 
     if (callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")) {
       return callbackUrl;
@@ -26,6 +27,7 @@ export default function LoginPage() {
     return "/";
   };
 
+  // Email and Password Login
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -51,6 +53,7 @@ export default function LoginPage() {
     }
   };
 
+  // Google Login
   const handleGoogleLogin = async () => {
     setError("");
     setGoogleLoading(true);
@@ -58,7 +61,7 @@ export default function LoginPage() {
     try {
       await signIn.social({
         provider: "google",
-        callbackURL: getRedirectUrl(),
+        callbackURL: `${window.location.origin}${getRedirectUrl()}`,
       });
     } catch {
       setError("Google login failed. Please try again.");
@@ -73,16 +76,19 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-[#244A3B]">
             Welcome Back
           </h1>
+
           <p className="mt-2 text-sm text-gray-500">
             Login to continue your wedding planning.
           </p>
         </div>
 
+        {/* Email Login */}
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-medium">
               Email Address
             </label>
+
             <input
               type="email"
               value={email}
@@ -97,6 +103,7 @@ export default function LoginPage() {
             <label className="mb-2 block text-sm font-medium">
               Password
             </label>
+
             <input
               type="password"
               value={password}
@@ -122,10 +129,12 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {/* Divider */}
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-200" />
           </div>
+
           <div className="relative flex justify-center">
             <span className="bg-white px-4 text-sm text-gray-500">
               OR
@@ -133,39 +142,36 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Google Login */}
         <button
           type="button"
           onClick={handleGoogleLogin}
           disabled={loading || googleLoading}
           className="flex w-full items-center justify-center gap-3 rounded-full border border-gray-300 px-6 py-3.5 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
         >
-          {googleLoading ? (
-            "Connecting to Google..."
-          ) : (
-            <>
-              <svg viewBox="0 0 48 48" className="h-5 w-5">
-                <path
-                  fill="#EA4335"
-                  d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.73 7.18l7.27 5.64c4.24-3.91 6.5-9.66 6.5-17.29Z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.55 2.56 10.78l7.97-6.19Z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M24 48c6.48 0 11.93-2.13 15.91-5.79l-7.27-5.64c-2.02 1.36-4.61 2.16-8.64 2.16-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 43.62 14.62 48 24 48Z"
-                />
-              </svg>
-              Continue with Google
-            </>
-          )}
+          <svg viewBox="0 0 48 48" className="h-5 w-5">
+            <path
+              fill="#EA4335"
+              d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"
+            />
+            <path
+              fill="#4285F4"
+              d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.73 7.18l7.27 5.64c4.24-3.91 6.5-9.66 6.5-17.29Z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.55 2.56 10.78l7.97-6.19Z"
+            />
+            <path
+              fill="#34A853"
+              d="M24 48c6.48 0 11.93-2.13 15.91-5.79l-7.27-5.64c-2.02 1.36-4.61 2.16-8.64 2.16-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 43.62 14.62 48 24 48Z"
+            />
+          </svg>
+
+          {googleLoading ? "Connecting to Google..." : "Continue with Google"}
         </button>
 
+        {/* Register Link */}
         <p className="mt-6 text-center text-sm text-gray-600">
           Don't have an account?{" "}
           <Link
