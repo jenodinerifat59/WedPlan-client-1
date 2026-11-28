@@ -1,38 +1,79 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-const protectedRoutes = [
-  "/admin",
-  "/vendor",
-  "/customer",
-  "/booking",
-  "/bookings",
-];
+const dashboardRoutes: Record<string, string> = {
+  admin: "/admin",
+  vendor: "/vendor",
+  customer: "/customer",
+};
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
 
-  const isProtectedRoute = protectedRoutes.some(
-    (route) =>
-      pathname === route || pathname.startsWith(`${route}/`)
+  const requiredRole = Object.keys(dashboardRoutes).find(
+    (role) => {
+      const route = dashboardRoutes[role];
+
+      return (
+        pathname === route ||
+        pathname.startsWith(`${route}/`)
+      );
+    }
   );
 
-  if (!isProtectedRoute) {
+  if (!requiredRole) {
     return NextResponse.next();
   }
 
-  const sessionToken =
-    request.cookies.get("better-auth.session_token")?.value ||
-    request.cookies.get("__Secure-better-auth.session_token")?.value;
+  // Verify the actual Better Auth session
+  const sessionResponse = await fetch(
+    new URL("/api/auth/get-session", request.url),
+    {
+      method: "GET",
+      headers: {
+        cookie: request.headers.get("cookie") || "",
+      },
+      cache: "no-store",
+    }
+  );
 
-  if (!sessionToken) {
+  if (!sessionResponse.ok) {
+    return NextResponse.redirect(
+      new URL("/login", request.url)
+    );
+  }
+
+  const session = await sessionResponse.json();
+  const user = session?.user;
+
+  // Not logged in
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
+
     loginUrl.searchParams.set(
       "callbackUrl",
-      `${pathname}${request.nextUrl.search}`
+      `${pathname}${search}`
     );
 
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Blocked account
+  if (user.isBlocked) {
+    return NextResponse.redirect(
+      new URL("/login?error=blocked", request.url)
+    );
+  }
+
+  const userRole = user.role;
+
+  // Wrong dashboard access
+  if (userRole !== requiredRole) {
+    const correctDashboard = dashboardRoutes[userRole];
+
+    return NextResponse.redirect(
+      new URL(correctDashboard || "/", request.url)
+    );
   }
 
   return NextResponse.next();
